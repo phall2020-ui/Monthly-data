@@ -13,6 +13,12 @@ from ui_calculations_v2 import render_calculations_v2_tab
 from ui_waterfall_v2 import render_waterfall_tab_v2
 from ui_excom_report import render_excom_report_tab
 
+
+def set_page(page_name: str):
+    """Callback to set the page selector value before rerun."""
+    st.session_state.page_selector = page_name
+
+
 def main():
     init_session_state()
     setup_page()
@@ -23,10 +29,20 @@ def main():
     with st.sidebar:
         st.header("📊 Navigation")
 
+        # All page options including Upload and Query
+        all_pages = ["ExCom Report", "Tables", "KPI Dashboard", "Calculations", "Waterfall", "Upload", "Query"]
+        
+        # Determine the current index based on session state
+        current_page = st.session_state.get("page_selector", "ExCom Report")
+        if current_page in all_pages:
+            current_index = all_pages.index(current_page)
+        else:
+            current_index = 0
+
         page = st.radio(
             "Select Page",
-            ["ExCom Report", "Tables", "KPI Dashboard", "Calculations", "Waterfall"],
-            index=0,
+            all_pages,
+            index=current_index,
             key="page_selector"
         )
 
@@ -35,13 +51,11 @@ def main():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("📤\nUpload", use_container_width=True, key="btn_upload"):
-                st.session_state.page_selector = "Upload"
-                st.rerun()
+            st.button("📤\nUpload", use_container_width=True, key="btn_upload",
+                      on_click=set_page, args=("Upload",))
         with col2:
-            if st.button("🔍\nQuery", use_container_width=True, key="btn_query"):
-                st.session_state.page_selector = "Query"
-                st.rerun()
+            st.button("🔍\nQuery", use_container_width=True, key="btn_query",
+                      on_click=set_page, args=("Query",))
 
         st.divider()
         render_sidebar(extractor)
