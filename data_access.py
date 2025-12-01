@@ -39,7 +39,7 @@ def safe_convert_dates(series: pd.Series) -> pd.Series:
                 if pd.isna(parsed):
                     all_valid = False
                     break
-            except Exception:
+            except (ValueError, TypeError):
                 all_valid = False
                 break
         
@@ -62,7 +62,7 @@ def safe_convert_dates(series: pd.Series) -> pd.Series:
                 parsed = pd.to_datetime(val_str, format=fmt, errors="coerce")
                 if pd.notna(parsed):
                     return parsed.strftime("%b-%y")
-            except Exception:
+            except (ValueError, TypeError):
                 continue
         
         # Fallback: let pandas infer the format
@@ -70,7 +70,7 @@ def safe_convert_dates(series: pd.Series) -> pd.Series:
             parsed = pd.to_datetime(val_str, errors="coerce")
             if pd.notna(parsed):
                 return parsed.strftime("%b-%y")
-        except Exception:
+        except (ValueError, TypeError):
             pass
         
         return val  # Return original if cannot convert
@@ -301,7 +301,7 @@ class SolarDataExtractor:
             if any(pat in col.lower() for pat in date_patterns):
                 try:
                     df_check[col] = safe_convert_dates(df_check[col])
-                except Exception:
+                except (ValueError, TypeError):
                     pass
         
         # Check for duplicates within the input DataFrame

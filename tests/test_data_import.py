@@ -40,12 +40,13 @@ class TestDataImportValidation(unittest.TestCase):
                 wal_path = cls.test_db_path + suffix
                 if os.path.exists(wal_path):
                     os.remove(wal_path)
-        except Exception:
+        except (OSError, FileNotFoundError):
             pass
 
     def setUp(self):
         """Set up test fixtures."""
-        # Ensure we're using a fresh instance with test database
+        # Reset singleton to use a fresh instance with test database
+        # This is necessary for test isolation with the singleton pattern
         SolarDataExtractor._instance = None
         self.extractor = SolarDataExtractor(self.test_db_path)
         self.table_name = "test_solar_data"
