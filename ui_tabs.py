@@ -13,15 +13,13 @@ The module provides a comprehensive UI for data management and visualization.
 """
 
 from io import BytesIO
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
-from ui_calculations_v2 import render_calculations_v2_tab
 
 from analysis import (
     DataProcessor,

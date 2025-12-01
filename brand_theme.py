@@ -77,7 +77,7 @@ def inject_brand_css():
         .stApp {{
             background-color: {BRAND_COLOURS["background"]};
         }}
-        
+
         /* Sidebar */
         section[data-testid="stSidebar"] {{
             background-color: {BRAND_COLOURS["primary_dark"]};
@@ -115,25 +115,25 @@ def inject_brand_css():
             border-color: rgba(255, 255, 255, 0.3) !important;
             color: {BRAND_COLOURS["text_inverse"]} !important;
         }}
-        
+
         /* Headers in main area */
         .main h1 {{
             color: {BRAND_COLOURS["primary"]} !important;
         }}
-        
+
         .main h2, .main h3 {{
             color: {BRAND_COLOURS["primary"]} !important;
         }}
-        
+
         /* Tabs */
         button[data-baseweb="tab"] {{
             color: {BRAND_COLOURS["muted_text"]} !important;
         }}
-        
+
         button[data-baseweb="tab"][aria-selected="true"] {{
             color: {BRAND_COLOURS["secondary"]} !important;
         }}
-        
+
         /* Metrics */
         [data-testid="stMetric"] {{
             background-color: {BRAND_COLOURS["surface"]};
@@ -141,17 +141,17 @@ def inject_brand_css():
             border-radius: 8px;
             padding: 1rem;
         }}
-        
+
         [data-testid="stMetricValue"] {{
             color: {BRAND_COLOURS["primary"]} !important;
         }}
-        
+
         /* DataFrames */
         [data-testid="stDataFrame"] {{
             border: 1px solid {BRAND_COLOURS["border"]};
             border-radius: 8px;
         }}
-        
+
         /* Charts */
         [data-testid="stPlotlyChart"] {{
             background-color: {BRAND_COLOURS["surface"]};
@@ -159,24 +159,24 @@ def inject_brand_css():
             border-radius: 8px;
             padding: 0.5rem;
         }}
-        
+
         /* Buttons */
         .stButton > button {{
             border-radius: 6px;
         }}
-        
+
         /* File uploader */
         [data-testid="stFileUploader"] {{
             border: 2px dashed {BRAND_COLOURS["border"]};
             border-radius: 8px;
             padding: 1rem;
         }}
-        
+
         /* Alerts */
         .stAlert {{
             border-radius: 8px;
         }}
-        
+
     </style>
     """
 
