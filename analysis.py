@@ -1,8 +1,15 @@
+"""
+Solar Data Analysis Module
+
+This module provides data processing and analysis capabilities for solar portfolio
+performance, including loss calculations, variance analysis, column detection,
+and visualization utilities for solar energy data.
+"""
+
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import re
 import streamlit as st
@@ -11,16 +18,40 @@ from config import Config
 
 
 class DataProcessor:
-    """Simple data processor to clean uploads and report minimal quality stats."""
+    """
+    Data processor for cleaning and validating uploaded solar data.
+
+    This class provides static methods for cleaning uploaded data files
+    and reporting on data quality metrics like completeness and missing values.
+    """
 
     @staticmethod
     def clean_uploaded_data(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Clean uploaded DataFrame by normalizing column names.
+
+        Args:
+            df: Raw DataFrame from uploaded file.
+
+        Returns:
+            Cleaned DataFrame with trimmed column names.
+        """
         df = df.copy()
         df.columns = [str(c).strip() for c in df.columns]
         return df
 
     @staticmethod
-    def validate_data_quality(df: pd.DataFrame, colmap: dict) -> dict:
+    def validate_data_quality(df: pd.DataFrame, colmap: Dict[str, str]) -> Dict[str, any]:
+        """
+        Validate data quality and generate a quality report.
+
+        Args:
+            df: DataFrame to validate.
+            colmap: Column mapping dictionary.
+
+        Returns:
+            Dictionary containing row count, completeness metrics, and missing data details.
+        """
         report = {
             "row_count": len(df),
             "completeness": 100.0,
@@ -39,9 +70,15 @@ class DataProcessor:
 
 
 class SolarDataAnalyzer:
-    """Performs technical loss and budget variance calculations with optimized operations."""
+    """
+    Analyzer for calculating solar technical losses and budget variances.
 
-    def __init__(self, df: pd.DataFrame, colmap: Dict[str, str]):
+    This class performs calculations of weather variance, technical losses,
+    PR variance, availability losses, and yield for solar assets based on
+    mapped column data.
+    """
+
+    def __init__(self, df: pd.DataFrame, colmap: Dict[str, str]) -> None:
         self.df = df.copy()
         self.colmap = colmap
         self._validate_columns()
@@ -55,23 +92,65 @@ class SolarDataAnalyzer:
             raise ValueError(f"Mapped columns not found in data: {', '.join(missing)}")
 
     def _get_col(self, key: str) -> Optional[str]:
+        """
+        Get the actual column name from the column mapping.
+
+        Args:
+            key: Canonical column key (e.g., "actual_gen", "pr_actual").
+
+        Returns:
+            Actual column name if it exists and is mapped, None otherwise.
+        """
         c = self.colmap.get(key)
         return c if c and c in self.df.columns else None
 
     def _normalize_percentage(self, series: pd.Series) -> pd.Series:
+        """
+        Normalize percentage values to decimal scale (0-1).
+
+        Args:
+            series: Series containing percentage values.
+
+        Returns:
+            Series with values normalized to 0-1 scale (values > 1 are divided by 100).
+        """
         return np.where(series > 1, series / 100, series)
 
     def _normalize_to_percent_scale(self, series: pd.Series) -> pd.Series:
         """
-        Convert availability/PR values to 0-100 scale:
-        - If values are <= 1 assume fraction and multiply by 100
-        - Otherwise leave as-is (already percentage)
+        Convert availability/PR values to 0-100 percentage scale.
+
+        Values <= 1 are assumed to be fractions and are multiplied by 100.
+        Values > 1 are assumed to already be percentages and are left as-is.
+
+        Args:
+            series: Series containing percentage or fractional values.
+
+        Returns:
+            Series with values normalized to 0-100 scale.
         """
         return np.where(series <= 1, series * 100, series)
 
     def compute_losses(self) -> pd.DataFrame:
+        """
+        Calculate all loss metrics and variances for solar performance analysis.
+
+        This method computes:
+        - Total technical loss (WAB - Actual)
+        - Weather variance (WAB - Budget)
+        - Total budget variance (Actual - Budget)
+        - PR loss (based on PR variance)
+        - Availability loss
+        - PR variance (percentage points)
+        - Availability variance (percentage points)
+        - Yield (kWh/kWp)
+
+        Returns:
+            DataFrame with all original data plus calculated loss and variance columns.
+        """
         df = self.df
 
+        # Get column names from mapping
         col_Act = self._get_col("actual_gen")
         col_WAB = self._get_col("wab")
         col_Bud = self._get_col("budget_gen")
@@ -120,10 +199,24 @@ class SolarDataAnalyzer:
 
 @st.cache_data(ttl=Config.CACHE_TTL, show_spinner=False)
 def detect_column_candidates(df_columns: tuple) -> Dict[str, str]:
+    """
+    Auto-detect column mappings based on pattern matching.
+
+    Uses regex patterns defined in Config.COLUMN_PATTERNS to automatically
+    identify which columns in the DataFrame correspond to standard solar
+    data fields (actual generation, WAB, budget, PR, availability, etc.).
+
+    Args:
+        df_columns: Tuple of column names from the DataFrame.
+
+    Returns:
+        Dictionary mapping canonical column keys to detected column names.
+    """
     cols = list(df_columns)
     detected = {}
 
     def score(col: str, patterns: List[str]) -> int:
+        """Score a column name against a list of regex patterns."""
         s = 0
         c_lower = col.lower().strip()
         for p in patterns:
@@ -145,6 +238,17 @@ def detect_column_candidates(df_columns: tuple) -> Dict[str, str]:
 
 
 def weighted_average(df: pd.DataFrame, val_col: str, wt_col: str) -> float:
+    """
+    Calculate weighted average of a column using another column as weights.
+
+    Args:
+        df: DataFrame containing the data.
+        val_col: Name of the column to average.
+        wt_col: Name of the column to use as weights.
+
+    Returns:
+        Weighted average value, or NaN if calculation not possible.
+    """
     mask = df[[val_col, wt_col]].notna().all(axis=1)
     d = df[mask]
     if d.empty:
@@ -160,6 +264,22 @@ def weighted_average(df: pd.DataFrame, val_col: str, wt_col: str) -> float:
 def add_time_period_column(
     df: pd.DataFrame, date_col: str, mode: str, fiscal_year_start_month: int = 4
 ) -> pd.DataFrame:
+    """
+    Add a time period column to the DataFrame based on the specified aggregation mode.
+
+    Converts date values into period labels for grouping (daily, weekly, monthly,
+    quarterly, YTD, or annual). Quarterly and annual calculations respect the
+    specified fiscal year start month.
+
+    Args:
+        df: DataFrame to add period column to.
+        date_col: Name of the date column.
+        mode: Time period mode - "Daily", "Weekly", "Monthly", "Quarterly", "YTD", or "Annual".
+        fiscal_year_start_month: Month that starts the fiscal year (1-12, default 4 for April).
+
+    Returns:
+        DataFrame with added "Period" column.
+    """
     date_formats = ["%b-%y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%b-%y"]
     dates = None
     for fmt in date_formats:
@@ -206,11 +326,32 @@ def aggregate_flexible(
     colmap: Dict[str, str],
     fiscal_year_start: int = 4,
 ) -> pd.DataFrame:
+    """
+    Flexibly aggregate solar data by time periods and grouping columns.
+
+    Performs aggregation with intelligent handling of different metric types:
+    - Energy metrics (kWh, MWh) are summed
+    - Performance ratios and availability are weighted-averaged by generation
+    - Variance metrics are recalculated after aggregation
+
+    Args:
+        df: DataFrame to aggregate.
+        date_col: Name of the date column for time-based grouping.
+        groupby_cols: List of column names to group by (e.g., ["Site"]).
+        time_period: Time aggregation level ("Daily", "Monthly", "Quarterly", "YTD", "Annual", or None).
+        metrics: List of metric column names to aggregate.
+        colmap: Column mapping dictionary.
+        fiscal_year_start: Month that starts the fiscal year (default 4 for April).
+
+    Returns:
+        Aggregated DataFrame with calculated metrics.
+    """
     if df.empty:
         return pd.DataFrame()
 
     df_agg = df.copy()
 
+    # Build grouping columns
     group_cols = []
     if date_col and time_period and time_period != "None":
         df_agg = add_time_period_column(df_agg, date_col, time_period, fiscal_year_start)
@@ -224,6 +365,7 @@ def aggregate_flexible(
 
     agg_dict = {}
 
+    # Get column names for weighted averaging
     weight_col = colmap.get("actual_gen")
     pr_actual_col = colmap.get("pr_actual")
     pr_budget_col = colmap.get("pr_budget")
@@ -233,6 +375,7 @@ def aggregate_flexible(
     sum_metrics = []
     weighted_avg_metrics = []
 
+    # Classify metrics for appropriate aggregation
     for m in metrics:
         if m not in df_agg.columns:
             continue
@@ -273,9 +416,7 @@ def aggregate_flexible(
 
         for m in weighted_avg_metrics:
             weighted = (
-                df_agg.groupby(group_cols)
-                .apply(lambda x: weighted_average(x, m, weight_col))
-                .reset_index(name=m)
+                df_agg.groupby(group_cols).apply(lambda x: weighted_average(x, m, weight_col)).reset_index(name=m)
             )
             result_df = result_df.merge(weighted, on=group_cols, how="left")
 
@@ -289,7 +430,9 @@ def aggregate_flexible(
         result_df["Var_PR_pp"] = (pr_bud - pr_act) * 100
 
     if "Availability_Avg_%" in result_df.columns:
-        avail_pct = np.where(result_df["Availability_Avg_%"] <= 1, result_df["Availability_Avg_%"] * 100, result_df["Availability_Avg_%"])
+        avail_pct = np.where(
+            result_df["Availability_Avg_%"] <= 1, result_df["Availability_Avg_%"] * 100, result_df["Availability_Avg_%"]
+        )
         result_df["Availability_Avg_%"] = avail_pct
         result_df["Var_Availability_pp"] = 99.0 - avail_pct
 
@@ -304,7 +447,20 @@ def aggregate_flexible(
     return result_df
 
 
-def plot_waterfall(df_single_row: pd.DataFrame, colmap: Dict[str, str]):
+def plot_waterfall(df_single_row: pd.DataFrame, colmap: Dict[str, str]) -> Optional[go.Figure]:
+    """
+    Create a waterfall chart showing the breakdown from budget to actual generation.
+
+    The waterfall visualizes:
+    Budget → Weather Variance → WAB → PR Loss → Availability Loss → Actual
+
+    Args:
+        df_single_row: DataFrame with a single row containing all required metrics.
+        colmap: Column mapping dictionary.
+
+    Returns:
+        Plotly Figure object with the waterfall chart, or None if required columns are missing.
+    """
     budget_col = colmap.get("budget_gen")
     actual_col = colmap.get("actual_gen")
 
@@ -343,5 +499,10 @@ def plot_waterfall(df_single_row: pd.DataFrame, colmap: Dict[str, str]):
         )
     )
 
-    fig.update_layout(title="Solar Loss Waterfall: Budget to Actual Energy (kWh)", showlegend=False, height=600, margin=dict(l=20, r=20, t=60, b=20))
+    fig.update_layout(
+        title="Solar Loss Waterfall: Budget to Actual Energy (kWh)",
+        showlegend=False,
+        height=600,
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
     return fig

@@ -1,3 +1,17 @@
+"""
+User Interface Tabs Module
+
+This module contains the rendering functions for all main application tabs
+in the Solar Asset Data Manager, including:
+- Sidebar with settings and data management
+- Upload tab for data import and column mapping
+- Query tab for running custom SQL queries
+- Tables tab for viewing database contents
+- KPI Dashboard for key performance indicators
+
+The module provides a comprehensive UI for data management and visualization.
+"""
+
 from io import BytesIO
 from typing import List
 
@@ -6,8 +20,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
-from ui_calculations_v2 import render_calculations_v2_tab
 
 from analysis import (
     DataProcessor,
@@ -20,9 +32,15 @@ from config import Config, clear_saved_colmap, save_colmap
 from data_access import SolarDataExtractor
 
 
-def ensure_colmap_from_df(df: pd.DataFrame):
+def ensure_colmap_from_df(df: pd.DataFrame) -> None:
     """
-    If a mapping is not yet confirmed, attempt to auto-detect from the given dataframe.
+    Auto-detect column mapping from a DataFrame if not yet confirmed.
+
+    Attempts to detect standard solar data columns in the DataFrame
+    and set up the column mapping in session state if successful.
+
+    Args:
+        df: DataFrame to analyze for column detection.
     """
     if st.session_state.get("colmap_confirmed"):
         return
@@ -37,9 +55,17 @@ def ensure_colmap_from_df(df: pd.DataFrame):
         st.info("Column mapping auto-detected from the selected table.")
     else:
         st.warning("Column mapping not confirmed. Go to Upload tab to map required fields.")
+
+
 def format_percent_like(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert PR/availability-like columns to percent scale (0-100) and round to 2dp.
+    Convert PR/availability columns to 0-100 percentage scale and round.
+
+    Args:
+        df: DataFrame with performance ratio and availability columns.
+
+    Returns:
+        DataFrame with percentage columns normalized to 0-100 scale and rounded to 2 decimal places.
     """
     df_fmt = df.copy()
     percent_cols = [c for c in df_fmt.columns if any(k in c.lower() for k in ["pr", "avail"])]
@@ -52,7 +78,19 @@ def format_percent_like(df: pd.DataFrame) -> pd.DataFrame:
     return df_fmt
 
 
-def render_sidebar(extractor: SolarDataExtractor):
+def render_sidebar(extractor: SolarDataExtractor) -> None:
+    """
+    Render the application sidebar with settings and utilities.
+
+    Displays:
+    - Database name configuration
+    - Fiscal year settings
+    - Column mapping reset button
+    - Sample data generation
+
+    Args:
+        extractor: SolarDataExtractor instance for database operations.
+    """
     st.header("⚙️ Settings")
     st.session_state.db_name = st.text_input("DB Name", st.session_state.db_name)
 
@@ -82,7 +120,9 @@ def render_sidebar(extractor: SolarDataExtractor):
         index=3,
         help="YTD and Quarterly calculations will start from this month",
     )
-    st.session_state.fiscal_year_start = list(fiscal_month_names.keys())[list(fiscal_month_names.values()).index(selected_month_name)]
+    st.session_state.fiscal_year_start = list(fiscal_month_names.keys())[
+        list(fiscal_month_names.values()).index(selected_month_name)
+    ]
 
     st.info(
         f"📊 FY structure:\n- Q1: {fiscal_month_names[st.session_state.fiscal_year_start]}-{fiscal_month_names[(st.session_state.fiscal_year_start + 2) % 12 or 12]}\n- Q2: {fiscal_month_names[(st.session_state.fiscal_year_start + 3) % 12 or 12]}-{fiscal_month_names[(st.session_state.fiscal_year_start + 5) % 12 or 12]}\n- Q3: {fiscal_month_names[(st.session_state.fiscal_year_start + 6) % 12 or 12]}-{fiscal_month_names[(st.session_state.fiscal_year_start + 8) % 12 or 12]}\n- Q4: {fiscal_month_names[(st.session_state.fiscal_year_start + 9) % 12 or 12]}-{fiscal_month_names[(st.session_state.fiscal_year_start + 11) % 12 or 12]}"
@@ -184,6 +224,7 @@ def render_sidebar(extractor: SolarDataExtractor):
             st.write(f" {t}")
     else:
         st.write("*No tables yet*")
+
 
 def render_upload_tab(tab, extractor: SolarDataExtractor):
     with tab:
@@ -290,7 +331,9 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                 ]
                 missing_cols = [col for col in required_cols if col not in df_upload.columns]
                 if missing_cols:
-                    st.warning(f"Missing columns in uploaded file: {', '.join(missing_cols)}. Please use the template format.")
+                    st.warning(
+                        f"Missing columns in uploaded file: {', '.join(missing_cols)}. Please use the template format."
+                    )
                     if show_debug:
                         st.write(f"- Missing required columns: `{missing_cols}`")
 
@@ -300,7 +343,9 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                 if show_debug:
                     st.write(f"- Stored in session state: `loaded_df`, `df_ready`")
 
-                st.success(f"? File '{uploaded.name}' loaded ({len(df_upload):,} rows). Please confirm column mapping below.")
+                st.success(
+                    f"? File '{uploaded.name}' loaded ({len(df_upload):,} rows). Please confirm column mapping below."
+                )
             except Exception as e:
                 st.error(f"Error loading file: {e}")
                 st.exception(e)
@@ -403,12 +448,19 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                 if not st.session_state.get("show_mapping_summary", False):
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button(" Review Mapping", help="Review your column mappings before saving", use_container_width=True):
+                        if st.button(
+                            " Review Mapping",
+                            help="Review your column mappings before saving",
+                            use_container_width=True,
+                        ):
                             st.session_state["show_mapping_summary"] = True
                             st.rerun()
                     with col2:
                         if st.button(
-                            "? Confirm & Save", type="primary", help="Confirm mappings and save to database immediately", use_container_width=True
+                            "? Confirm & Save",
+                            type="primary",
+                            help="Confirm mappings and save to database immediately",
+                            use_container_width=True,
                         ):
                             st.session_state["show_mapping_summary"] = False
                             st.session_state["proceed_with_save"] = True
@@ -418,13 +470,28 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                     st.write("**Mapping Summary:**")
                     mapping_df = pd.DataFrame(
                         [
-                            {"Field": "Actual Generation", "Mapped To": st.session_state.colmap.get("actual_gen", "Not set")},
-                            {"Field": "Weather-Adjusted Budget", "Mapped To": st.session_state.colmap.get("wab", "Not set")},
-                            {"Field": "Budget Generation", "Mapped To": st.session_state.colmap.get("budget_gen", "Not set")},
+                            {
+                                "Field": "Actual Generation",
+                                "Mapped To": st.session_state.colmap.get("actual_gen", "Not set"),
+                            },
+                            {
+                                "Field": "Weather-Adjusted Budget",
+                                "Mapped To": st.session_state.colmap.get("wab", "Not set"),
+                            },
+                            {
+                                "Field": "Budget Generation",
+                                "Mapped To": st.session_state.colmap.get("budget_gen", "Not set"),
+                            },
                             {"Field": "Actual PR", "Mapped To": st.session_state.colmap.get("pr_actual", "Not set")},
                             {"Field": "Budget PR", "Mapped To": st.session_state.colmap.get("pr_budget", "Not set")},
-                            {"Field": "Availability", "Mapped To": st.session_state.colmap.get("availability", "Not set")},
-                            {"Field": "Capacity (kWp)", "Mapped To": st.session_state.colmap.get("capacity", "Not set")},
+                            {
+                                "Field": "Availability",
+                                "Mapped To": st.session_state.colmap.get("availability", "Not set"),
+                            },
+                            {
+                                "Field": "Capacity (kWp)",
+                                "Mapped To": st.session_state.colmap.get("capacity", "Not set"),
+                            },
                             {"Field": "Site", "Mapped To": st.session_state.colmap.get("site", "Not set")},
                             {"Field": "Date", "Mapped To": st.session_state.colmap.get("date", "Not set")},
                         ]
@@ -517,7 +584,9 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                 st.write(f"- show_save_ui: `{show_save_ui}`")
 
             if not show_save_ui:
-                if st.button("Show Save UI (manual override)", help="If you have mapped columns and want to save, click here."):
+                if st.button(
+                    "Show Save UI (manual override)", help="If you have mapped columns and want to save, click here."
+                ):
                     show_save_ui = True
             if show_save_ui:
                 st.divider()
@@ -586,6 +655,7 @@ def render_upload_tab(tab, extractor: SolarDataExtractor):
                                 st.write("** DEBUG: Save Exception**")
                                 st.code(traceback.format_exc())
 
+
 def render_query_tab(tab, extractor: SolarDataExtractor):
     with tab:
         st.header("🔍 SQL Query")
@@ -611,6 +681,7 @@ def render_query_tab(tab, extractor: SolarDataExtractor):
                 else:
                     st.error(f"Query error: {result}")
 
+
 def render_tables_tab(tab, extractor: SolarDataExtractor):
     with tab:
         st.header("📊 Manage Tables")
@@ -632,14 +703,22 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                         st.write(f"**Rows:** {len(df_table):,} | **Columns:** {len(df_table.columns)}")
 
                         with st.expander(" Search & Filter"):
-                            search_col = st.selectbox("Search in column", ["All"] + list(df_table.columns), key="search_col")
+                            search_col = st.selectbox(
+                                "Search in column", ["All"] + list(df_table.columns), key="search_col"
+                            )
                             search_term = st.text_input("Search term", key="search_term")
 
                             if search_term:
                                 if search_col == "All":
-                                    mask = df_table.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
+                                    mask = (
+                                        df_table.astype(str)
+                                        .apply(lambda x: x.str.contains(search_term, case=False, na=False))
+                                        .any(axis=1)
+                                    )
                                 else:
-                                    mask = df_table[search_col].astype(str).str.contains(search_term, case=False, na=False)
+                                    mask = (
+                                        df_table[search_col].astype(str).str.contains(search_term, case=False, na=False)
+                                    )
                                 df_table = df_table[mask]
                                 st.info(f"Found {len(df_table)} matching rows")
 
@@ -656,7 +735,10 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                         with col_pivot1:
                             st.write("**Rows**")
                             pivot_rows = st.multiselect(
-                                "Group by (rows)", df_table.columns.tolist(), key="pivot_rows", help="Categories to show as rows"
+                                "Group by (rows)",
+                                df_table.columns.tolist(),
+                                key="pivot_rows",
+                                help="Categories to show as rows",
                             )
 
                         with col_pivot2:
@@ -672,7 +754,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                             st.write("**Values**")
                             numeric_cols = df_table.select_dtypes(include=[np.number]).columns.tolist()
                             pivot_values = st.multiselect("Aggregate (values)", numeric_cols, key="pivot_values")
-                            pivot_agg = st.selectbox("Aggregation", ["sum", "mean", "count", "min", "max", "std"], key="pivot_agg")
+                            pivot_agg = st.selectbox(
+                                "Aggregation", ["sum", "mean", "count", "min", "max", "std"], key="pivot_agg"
+                            )
 
                         if st.button(" Generate Pivot", key="generate_pivot"):
                             if not pivot_rows:
@@ -694,7 +778,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                                         pivot_result = df_table.groupby(pivot_rows)[pivot_values].agg(pivot_agg)
 
                                     st.session_state["pivot_result"] = pivot_result
-                                    st.success(f"Pivot table created: {pivot_result.shape[0]} rows  {pivot_result.shape[1]} columns")
+                                    st.success(
+                                        f"Pivot table created: {pivot_result.shape[0]} rows  {pivot_result.shape[1]} columns"
+                                    )
                                 except Exception as e:
                                     st.error(f"Pivot error: {e}")
 
@@ -712,10 +798,14 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                             col_piv1, col_piv2 = st.columns(2)
                             with col_piv1:
                                 csv_pivot = pivot_result.to_csv()
-                                st.download_button(" Download Pivot CSV", csv_pivot, f"{selected_table}_pivot.csv", "text/csv")
+                                st.download_button(
+                                    " Download Pivot CSV", csv_pivot, f"{selected_table}_pivot.csv", "text/csv"
+                                )
 
                             with col_piv2:
-                                save_pivot_name = st.text_input("Save pivot as", f"{selected_table}_pivot", key="save_pivot_name")
+                                save_pivot_name = st.text_input(
+                                    "Save pivot as", f"{selected_table}_pivot", key="save_pivot_name"
+                                )
                                 if st.button(" Save Pivot to DB", key="save_pivot_btn"):
                                     pivot_flat = pivot_result.reset_index()
                                     ok, msg = extractor.extract_from_df(pivot_flat, save_pivot_name, "replace")
@@ -728,7 +818,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
 
                         st.warning(" Changes are permanent and cannot be undone. Use with caution!")
 
-                        edit_mode = st.radio("Edit mode", ["Add Row", "Update Rows", "Delete Rows"], horizontal=True, key="edit_mode")
+                        edit_mode = st.radio(
+                            "Edit mode", ["Add Row", "Update Rows", "Delete Rows"], horizontal=True, key="edit_mode"
+                        )
 
                         if edit_mode == "Add Row":
                             st.write("**Add New Row**")
@@ -778,11 +870,17 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                                         current_val = current_row[col]
 
                                         if dtype in ["int64", "float64"]:
-                                            updated_row[col] = st.number_input(f"{col}", value=float(current_val), key=f"upd_{col}")
+                                            updated_row[col] = st.number_input(
+                                                f"{col}", value=float(current_val), key=f"upd_{col}"
+                                            )
                                         elif dtype == "bool":
-                                            updated_row[col] = st.checkbox(f"{col}", value=bool(current_val), key=f"upd_{col}")
+                                            updated_row[col] = st.checkbox(
+                                                f"{col}", value=bool(current_val), key=f"upd_{col}"
+                                            )
                                         else:
-                                            updated_row[col] = st.text_input(f"{col}", value=str(current_val), key=f"upd_{col}")
+                                            updated_row[col] = st.text_input(
+                                                f"{col}", value=str(current_val), key=f"upd_{col}"
+                                            )
 
                                 if st.button(" Update Row", type="primary", key="btn_update_row"):
                                     df_table.iloc[row_index] = pd.Series(updated_row)
@@ -797,7 +895,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                             st.write("**Delete Rows by Condition**")
 
                             del_col = st.selectbox("Column to filter", df_table.columns, key="del_col")
-                            del_condition = st.selectbox("Condition", ["equals", "contains", "greater than", "less than"], key="del_cond")
+                            del_condition = st.selectbox(
+                                "Condition", ["equals", "contains", "greater than", "less than"], key="del_cond"
+                            )
                             del_value = st.text_input("Value", key="del_value")
 
                             if st.button(" Preview Rows to Delete", key="preview_delete"):
@@ -805,7 +905,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                                     if del_condition == "equals":
                                         mask = df_table[del_col].astype(str) == del_value
                                     elif del_condition == "contains":
-                                        mask = df_table[del_col].astype(str).str.contains(del_value, case=False, na=False)
+                                        mask = (
+                                            df_table[del_col].astype(str).str.contains(del_value, case=False, na=False)
+                                        )
                                     elif del_condition == "greater than":
                                         mask = df_table[del_col] > float(del_value)
                                     else:
@@ -838,7 +940,9 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
                         st.subheader("🗑️ Delete Table")
                         st.error(f" This will permanently delete the entire table: **{selected_table}**")
 
-                        confirm_table_name = st.text_input("Type table name to confirm deletion:", key="confirm_table_del")
+                        confirm_table_name = st.text_input(
+                            "Type table name to confirm deletion:", key="confirm_table_del"
+                        )
 
                         if confirm_table_name == selected_table:
                             if st.button("? Delete Table Permanently", type="primary", key="btn_delete_table"):
@@ -865,6 +969,7 @@ def render_tables_tab(tab, extractor: SolarDataExtractor):
 
             st.dataframe(pd.DataFrame(stats_data), width="stretch", hide_index=True)
 
+
 def render_kpi_tab(tab, extractor: SolarDataExtractor):
     with tab:
         st.header("📈 KPI Dashboard: Monthly, QTD, YTD, Total")
@@ -882,7 +987,9 @@ def render_kpi_tab(tab, extractor: SolarDataExtractor):
                     st.warning("No date/period column found for period aggregation.")
                 else:
                     date_col = st.selectbox("Date/Period Column", date_cols, key="kpi_date_col")
-                    period_type = st.selectbox("Aggregate by", ["Monthly", "Quarterly (QTD)", "YTD", "Total"], key="kpi_period")
+                    period_type = st.selectbox(
+                        "Aggregate by", ["Monthly", "Quarterly (QTD)", "YTD", "Total"], key="kpi_period"
+                    )
                     period_map = {"Monthly": "Monthly", "Quarterly (QTD)": "Quarterly", "YTD": "YTD", "Total": None}
                     time_period = period_map[period_type]
                     metrics = [c for c in df_kpi.columns if pd.api.types.is_numeric_dtype(df_kpi[c])]
@@ -891,7 +998,8 @@ def render_kpi_tab(tab, extractor: SolarDataExtractor):
                     kpi_df = format_percent_like(kpi_df)
                     for col in kpi_df.columns:
                         if col.lower() in ["period", "month"] or (
-                            kpi_df[col].dtype == "O" and kpi_df[col].astype(str).str.match(r"\d{4}-\d{2}(-\d{2})?$").any()
+                            kpi_df[col].dtype == "O"
+                            and kpi_df[col].astype(str).str.match(r"\d{4}-\d{2}(-\d{2})?$").any()
                         ):
                             try:
                                 kpi_df[col] = pd.to_datetime(kpi_df[col], errors="coerce").dt.strftime("%b-%y")
@@ -903,7 +1011,10 @@ def render_kpi_tab(tab, extractor: SolarDataExtractor):
 
                     st.subheader(f"📈 KPIs by {period_type}")
                     st.dataframe(kpi_df, width="stretch")
-                    st.download_button("Download KPIs (CSV)", kpi_df.to_csv(index=False), f"kpi_{period_type.lower()}.csv", "text/csv")
+                    st.download_button(
+                        "Download KPIs (CSV)", kpi_df.to_csv(index=False), f"kpi_{period_type.lower()}.csv", "text/csv"
+                    )
+
 
 def render_calculations_tab(tab, extractor: SolarDataExtractor):
     with tab:
@@ -984,8 +1095,12 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                         end_date = st.date_input("End date", key="end_date_filter")
 
                                     if start_date and end_date:
-                                        df_res[date_col_filter] = pd.to_datetime(df_res[date_col_filter], errors="coerce")
-                                        mask = (df_res[date_col_filter] >= pd.Timestamp(start_date)) & (df_res[date_col_filter] <= pd.Timestamp(end_date))
+                                        df_res[date_col_filter] = pd.to_datetime(
+                                            df_res[date_col_filter], errors="coerce"
+                                        )
+                                        mask = (df_res[date_col_filter] >= pd.Timestamp(start_date)) & (
+                                            df_res[date_col_filter] <= pd.Timestamp(end_date)
+                                        )
                                         df_res = df_res[mask].copy()
                                         st.info(f"Filtered to {len(df_res)} rows between {start_date} and {end_date}")
 
@@ -994,7 +1109,10 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                         with col1:
                             st.write("**Time Period**")
                             time_period = st.selectbox(
-                                "Aggregate by", ["None", "Daily", "Weekly", "Monthly", "Quarterly", "YTD", "Annual"], index=3, key="time_agg"
+                                "Aggregate by",
+                                ["None", "Daily", "Weekly", "Monthly", "Quarterly", "YTD", "Annual"],
+                                index=3,
+                                key="time_agg",
                             )
 
                             date_cols = [c for c in df_res.columns if "date" in c.lower() or "time" in c.lower()]
@@ -1006,7 +1124,9 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                             st.write("**Dimensions**")
                             exclude_patterns = ["loss", "var_", "kwh", "date", "time", "gen", "pr", "avail"]
                             potential_groups = [
-                                c for c in df_res.columns if not any(p in c.lower() for p in exclude_patterns) and df_res[c].dtype == "object"
+                                c
+                                for c in df_res.columns
+                                if not any(p in c.lower() for p in exclude_patterns) and df_res[c].dtype == "object"
                             ]
 
                             groupby_cols = st.multiselect(
@@ -1018,7 +1138,9 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
 
                         with col3:
                             st.write("**Metrics**")
-                            available_metrics = [c for c in df_res.columns if any(x in c for x in ["Loss", "Var_", "gen", "kWh"])]
+                            available_metrics = [
+                                c for c in df_res.columns if any(x in c for x in ["Loss", "Var_", "gen", "kWh"])
+                            ]
                             selected_metrics = st.multiselect(
                                 "Select Metrics",
                                 available_metrics,
@@ -1030,7 +1152,9 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                 st.warning("Please select at least one metric.")
                             else:
                                 try:
-                                    fiscal_year_start = st.session_state.get("fiscal_year_start", Config.DEFAULT_FISCAL_START)
+                                    fiscal_year_start = st.session_state.get(
+                                        "fiscal_year_start", Config.DEFAULT_FISCAL_START
+                                    )
                                     agg_df = aggregate_flexible(
                                         df_res,
                                         date_col,
@@ -1049,24 +1173,42 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                             st.divider()
                             agg_result = st.session_state["agg_result"]
 
-
                             with st.expander(" Filter Aggregated Results", expanded=False):
                                 filter_col1, filter_col2 = st.columns(2)
                                 with filter_col1:
                                     numeric_cols = agg_result.select_dtypes(include=[np.number]).columns.tolist()
                                     if numeric_cols:
-                                        filter_metric = st.selectbox("Filter by metric", ["None"] + numeric_cols, key="filter_metric")
+                                        filter_metric = st.selectbox(
+                                            "Filter by metric", ["None"] + numeric_cols, key="filter_metric"
+                                        )
                                         if filter_metric != "None":
-                                            filter_condition = st.selectbox("Condition", ["Greater than", "Less than", "Between"], key="filter_cond")
+                                            filter_condition = st.selectbox(
+                                                "Condition", ["Greater than", "Less than", "Between"], key="filter_cond"
+                                            )
                                             if filter_condition == "Between":
                                                 col_a, col_b = st.columns(2)
                                                 with col_a:
-                                                    min_val = st.number_input("Min value", value=float(agg_result[filter_metric].min()), key="filter_min")
+                                                    min_val = st.number_input(
+                                                        "Min value",
+                                                        value=float(agg_result[filter_metric].min()),
+                                                        key="filter_min",
+                                                    )
                                                 with col_b:
-                                                    max_val = st.number_input("Max value", value=float(agg_result[filter_metric].max()), key="filter_max")
-                                                agg_result = agg_result[(agg_result[filter_metric] >= min_val) & (agg_result[filter_metric] <= max_val)]
+                                                    max_val = st.number_input(
+                                                        "Max value",
+                                                        value=float(agg_result[filter_metric].max()),
+                                                        key="filter_max",
+                                                    )
+                                                agg_result = agg_result[
+                                                    (agg_result[filter_metric] >= min_val)
+                                                    & (agg_result[filter_metric] <= max_val)
+                                                ]
                                             else:
-                                                threshold = st.number_input("Threshold", value=float(agg_result[filter_metric].mean()), key="filter_thresh")
+                                                threshold = st.number_input(
+                                                    "Threshold",
+                                                    value=float(agg_result[filter_metric].mean()),
+                                                    key="filter_thresh",
+                                                )
                                                 if filter_condition == "Greater than":
                                                     agg_result = agg_result[agg_result[filter_metric] > threshold]
                                                 else:
@@ -1075,10 +1217,20 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
 
                                 with filter_col2:
                                     if numeric_cols:
-                                        topn_metric = st.selectbox("Rank by", ["None"] + numeric_cols, key="topn_metric")
+                                        topn_metric = st.selectbox(
+                                            "Rank by", ["None"] + numeric_cols, key="topn_metric"
+                                        )
                                         if topn_metric != "None":
-                                            topn_type = st.radio("Show", ["Top N", "Bottom N"], horizontal=True, key="topn_type")
-                                            n_value = st.number_input("N", min_value=1, max_value=len(agg_result), value=min(5, len(agg_result)), key="topn_n")
+                                            topn_type = st.radio(
+                                                "Show", ["Top N", "Bottom N"], horizontal=True, key="topn_type"
+                                            )
+                                            n_value = st.number_input(
+                                                "N",
+                                                min_value=1,
+                                                max_value=len(agg_result),
+                                                value=min(5, len(agg_result)),
+                                                key="topn_n",
+                                            )
                                             if topn_type == "Top N":
                                                 agg_result = agg_result.nlargest(n_value, topn_metric)
                                             else:
@@ -1090,7 +1242,8 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                             agg_display[non_pr_cols] = agg_display[non_pr_cols].round(2)
                             st.dataframe(
                                 agg_display.style.background_gradient(
-                                    subset=[c for c in agg_display.columns if "Var_" in c or "Loss_" in c], cmap="RdYlGn_r"
+                                    subset=[c for c in agg_display.columns if "Var_" in c or "Loss_" in c],
+                                    cmap="RdYlGn_r",
                                 ),
                                 width="stretch",
                             )
@@ -1106,7 +1259,11 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                         st.metric(
                                             "Avg PR Variance",
                                             f"{avg_pr_var:.2f} pp",
-                                            delta=f"{-avg_pr_var:.2f} pp" if avg_pr_var > 0 else f"+{abs(avg_pr_var):.2f} pp",
+                                            delta=(
+                                                f"{-avg_pr_var:.2f} pp"
+                                                if avg_pr_var > 0
+                                                else f"+{abs(avg_pr_var):.2f} pp"
+                                            ),
                                             delta_color="inverse",
                                             help="Positive = Underperformance",
                                         )
@@ -1117,7 +1274,11 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                         st.metric(
                                             "Avg Avail Variance",
                                             f"{avg_avail_var:.2f} pp",
-                                            delta=f"{-avg_avail_var:.2f} pp" if avg_avail_var > 0 else f"+{abs(avg_avail_var):.2f} pp",
+                                            delta=(
+                                                f"{-avg_avail_var:.2f} pp"
+                                                if avg_avail_var > 0
+                                                else f"+{abs(avg_avail_var):.2f} pp"
+                                            ),
                                             delta_color="inverse",
                                             help="99% target - Positive = Below target",
                                         )
@@ -1125,12 +1286,20 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                 with metric_cols[2]:
                                     if "Loss_Total_Tech_kWh" in agg_result.columns:
                                         total_tech_loss = agg_result["Loss_Total_Tech_kWh"].sum()
-                                        st.metric("Total Tech Loss", f"{total_tech_loss:,.0f} kWh", help="WAB - Actual Generation")
+                                        st.metric(
+                                            "Total Tech Loss",
+                                            f"{total_tech_loss:,.0f} kWh",
+                                            help="WAB - Actual Generation",
+                                        )
 
                                 with metric_cols[3]:
                                     if "Yield_kWh_per_kWp" in agg_result.columns:
                                         avg_yield = agg_result["Yield_kWh_per_kWp"].mean()
-                                        st.metric("Avg Yield", f"{avg_yield:.1f} kWh/kWp", help="Average specific yield across portfolio")
+                                        st.metric(
+                                            "Avg Yield",
+                                            f"{avg_yield:.1f} kWh/kWp",
+                                            help="Average specific yield across portfolio",
+                                        )
 
                                 with metric_cols[4]:
                                     if "Var_Weather_kWh" in agg_result.columns:
@@ -1160,12 +1329,18 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                     if add_second_metric:
                                         chart_metric2 = st.selectbox(
                                             "Secondary metric",
-                                            [c for c in agg_result.columns if c not in groupby_cols and c != "Period" and c != chart_metric],
+                                            [
+                                                c
+                                                for c in agg_result.columns
+                                                if c not in groupby_cols and c != "Period" and c != chart_metric
+                                            ],
                                             key="viz_metric2",
                                         )
 
                             with viz_col2:
-                                chart_type = st.selectbox("Chart type", ["Bar", "Line", "Area", "Scatter", "Stacked Bar"], key="chart_type")
+                                chart_type = st.selectbox(
+                                    "Chart type", ["Bar", "Line", "Area", "Scatter", "Stacked Bar"], key="chart_type"
+                                )
 
                             if chart_metric:
                                 if "Period" in agg_result.columns:
@@ -1178,34 +1353,82 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                 if chart_type == "Bar":
                                     if chart_metric2:
                                         fig = go.Figure()
-                                        fig.add_trace(go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric], name=chart_metric))
-                                        fig.add_trace(go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric2], name=chart_metric2))
+                                        fig.add_trace(
+                                            go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric], name=chart_metric)
+                                        )
+                                        fig.add_trace(
+                                            go.Bar(
+                                                x=agg_result[x_axis], y=agg_result[chart_metric2], name=chart_metric2
+                                            )
+                                        )
                                         fig.update_layout(barmode="group", title=f"{chart_metric} vs {chart_metric2}")
                                     else:
-                                        fig = px.bar(agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} by {x_axis}")
+                                        fig = px.bar(
+                                            agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} by {x_axis}"
+                                        )
                                 elif chart_type == "Stacked Bar":
                                     if chart_metric2:
                                         fig = go.Figure()
-                                        fig.add_trace(go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric], name=chart_metric))
-                                        fig.add_trace(go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric2], name=chart_metric2))
-                                        fig.update_layout(barmode="stack", title=f"{chart_metric} + {chart_metric2} (Stacked)")
+                                        fig.add_trace(
+                                            go.Bar(x=agg_result[x_axis], y=agg_result[chart_metric], name=chart_metric)
+                                        )
+                                        fig.add_trace(
+                                            go.Bar(
+                                                x=agg_result[x_axis], y=agg_result[chart_metric2], name=chart_metric2
+                                            )
+                                        )
+                                        fig.update_layout(
+                                            barmode="stack", title=f"{chart_metric} + {chart_metric2} (Stacked)"
+                                        )
                                     else:
-                                        fig = px.bar(agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} (Stacked)")
+                                        fig = px.bar(
+                                            agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} (Stacked)"
+                                        )
                                 elif chart_type == "Line":
                                     if chart_metric2:
                                         fig = go.Figure()
-                                        fig.add_trace(go.Scatter(x=agg_result[x_axis], y=agg_result[chart_metric], mode="lines+markers", name=chart_metric))
-                                        fig.add_trace(go.Scatter(x=agg_result[x_axis], y=agg_result[chart_metric2], mode="lines+markers", name=chart_metric2))
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=agg_result[x_axis],
+                                                y=agg_result[chart_metric],
+                                                mode="lines+markers",
+                                                name=chart_metric,
+                                            )
+                                        )
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=agg_result[x_axis],
+                                                y=agg_result[chart_metric2],
+                                                mode="lines+markers",
+                                                name=chart_metric2,
+                                            )
+                                        )
                                         fig.update_layout(title=f"{chart_metric} vs {chart_metric2}")
                                     else:
-                                        fig = px.line(agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} Trend", markers=True)
+                                        fig = px.line(
+                                            agg_result,
+                                            x=x_axis,
+                                            y=chart_metric,
+                                            title=f"{chart_metric} Trend",
+                                            markers=True,
+                                        )
                                 elif chart_type == "Scatter":
                                     if chart_metric2:
-                                        fig = px.scatter(agg_result, x=chart_metric, y=chart_metric2, title=f"{chart_metric} vs {chart_metric2}", hover_data=[x_axis])
+                                        fig = px.scatter(
+                                            agg_result,
+                                            x=chart_metric,
+                                            y=chart_metric2,
+                                            title=f"{chart_metric} vs {chart_metric2}",
+                                            hover_data=[x_axis],
+                                        )
                                     else:
-                                        fig = px.scatter(agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} Distribution")
+                                        fig = px.scatter(
+                                            agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} Distribution"
+                                        )
                                 else:
-                                    fig = px.area(agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} Over Time")
+                                    fig = px.area(
+                                        agg_result, x=x_axis, y=chart_metric, title=f"{chart_metric} Over Time"
+                                    )
 
                                 st.plotly_chart(fig, width="stretch")
 
@@ -1241,7 +1464,9 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                                     st.info("Excel export requires openpyxl")
 
                             with col_exp3:
-                                save_agg_name = st.text_input("Table name", f"{calc_tbl}_agg_{time_period}", key="save_agg")
+                                save_agg_name = st.text_input(
+                                    "Table name", f"{calc_tbl}_agg_{time_period}", key="save_agg"
+                                )
                                 if st.button(" Save to DB", key="save_agg_btn", width="stretch"):
                                     ok, msg = extractor.extract_from_df(agg_result, save_agg_name, "replace")
                                     if ok:
@@ -1261,6 +1486,7 @@ def render_calculations_tab(tab, extractor: SolarDataExtractor):
                         st.warning("No calculated columns found. Check your column mapping.")
             else:
                 st.warning("Confirm column mapping in the Upload tab first, or selected table is empty.")
+
 
 def render_waterfall_tab(tab, extractor: SolarDataExtractor):
     with tab:

@@ -1,3 +1,13 @@
+"""
+Database Schema Inspector Utility
+
+This script lists all tables and their column definitions in the solar assets
+database. Useful for understanding the database structure and available data.
+
+Usage:
+    Update DB_PATH with your database path and run the script.
+"""
+
 import sqlite3
 
 DB_PATH = r"c:/Users/PeterHall/OneDrive - AMPYR IDEA UK Ltd/Python scripts/Inverter data - Juggle/solar_assets.db"
