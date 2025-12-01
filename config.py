@@ -8,7 +8,7 @@ Data Manager application.
 
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import streamlit as st
 
@@ -139,7 +139,8 @@ def setup_page() -> None:
     st.title("☀️ Solar Asset Data Manager")
     st.markdown(
         """
-**Comprehensive solar portfolio performance analysis tool** - Upload data, calculate losses, and visualize performance waterfalls.
+**Comprehensive solar portfolio performance analysis tool** - Upload data, calculate losses,
+and visualize performance waterfalls.
 """
     )
 
@@ -188,7 +189,7 @@ def setup_page() -> None:
 - **Q3:** October - December
 - **Q4:** January - March
 
-**Example:** 
+**Example:**
 - October 2024 data → FY2025-Q3
 - YTD in December 2024 → Apr 2024 to Dec 2024 (FY2025 YTD)
 - March 2025 data → FY2025-Q4 (end of fiscal year)

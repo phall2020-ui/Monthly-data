@@ -26,6 +26,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from config import Config
+
 try:
     from analysis import SolarDataAnalyzer, weighted_average
 except ImportError:
@@ -53,6 +54,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════════════
 # WATERFALL CHART HELPERS - EXCOM STYLE
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def build_excom_waterfall_steps(
     budget: float,
@@ -118,6 +120,7 @@ def build_excom_waterfall_steps(
 # WATERFALL CHART - EXCOM STYLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_excom_waterfall(
     budget: float,
     weather_var: float,
@@ -169,30 +172,25 @@ def create_excom_waterfall(
 
     fig = go.Figure()
 
-    fig.add_trace(go.Waterfall(
-        name="Performance",
-        orientation="v",
-        measure=measures,
-        x=labels,
-        y=values,
-        text=[f"{v:,.0f}" for v in values],
-        textposition="outside",
-        textfont=dict(size=11, color=BRAND_COLOURS["text"]),
-        connector=dict(
-            line=dict(color=BRAND_COLOURS["border"], width=1, dash="dot")
-        ),
-        increasing=dict(marker=dict(color=BRAND_COLOURS["positive"])),
-        decreasing=dict(marker=dict(color=BRAND_COLOURS["negative"])),
-        totals=dict(marker=dict(color=BRAND_COLOURS["primary"])),
-    ))
+    fig.add_trace(
+        go.Waterfall(
+            name="Performance",
+            orientation="v",
+            measure=measures,
+            x=labels,
+            y=values,
+            text=[f"{v:,.0f}" for v in values],
+            textposition="outside",
+            textfont=dict(size=11, color=BRAND_COLOURS["text"]),
+            connector=dict(line=dict(color=BRAND_COLOURS["border"], width=1, dash="dot")),
+            increasing=dict(marker=dict(color=BRAND_COLOURS["positive"])),
+            decreasing=dict(marker=dict(color=BRAND_COLOURS["negative"])),
+            totals=dict(marker=dict(color=BRAND_COLOURS["primary"])),
+        )
+    )
 
     fig.update_layout(
-        title=dict(
-            text=title,
-            font=dict(size=16, color=BRAND_COLOURS["primary"]),
-            x=0.5,
-            xanchor="center"
-        ),
+        title=dict(text=title, font=dict(size=16, color=BRAND_COLOURS["primary"]), x=0.5, xanchor="center"),
         showlegend=False,
         height=height,
         paper_bgcolor=BRAND_COLOURS["surface"],
@@ -254,7 +252,8 @@ def create_dual_waterfall(
     )
 
     fig = make_subplots(
-        rows=1, cols=2,
+        rows=1,
+        cols=2,
         subplot_titles=[f"Performance {month_name}", "Performance YTD"],
         horizontal_spacing=0.1,
     )
@@ -293,7 +292,8 @@ def create_dual_waterfall(
             decreasing=dict(marker=dict(color=BRAND_COLOURS["negative"])),
             totals=dict(marker=dict(color=BRAND_COLOURS["secondary"])),
         ),
-        row=1, col=1
+        row=1,
+        col=1,
     )
 
     # YTD waterfall
@@ -311,7 +311,8 @@ def create_dual_waterfall(
             decreasing=dict(marker=dict(color=BRAND_COLOURS["negative"])),
             totals=dict(marker=dict(color=BRAND_COLOURS["secondary"])),
         ),
-        row=1, col=2
+        row=1,
+        col=2,
     )
 
     fig.update_layout(
@@ -331,6 +332,7 @@ def create_dual_waterfall(
 # KPI GAUGE CARDS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_kpi_gauge(
     value: float,
     target: float,
@@ -347,30 +349,28 @@ def create_kpi_gauge(
     else:
         bar_color = BRAND_COLOURS["negative"]
 
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=value,
-        number=dict(suffix=suffix, font=dict(size=28, color=BRAND_COLOURS["primary"])),
-        delta=dict(
-            reference=target,
-            relative=False,
-            valueformat=".1f",
-            increasing=dict(color=BRAND_COLOURS["positive"]),
-            decreasing=dict(color=BRAND_COLOURS["negative"]),
-        ),
-        title=dict(text=title, font=dict(size=14, color=BRAND_COLOURS["text_secondary"])),
-        gauge=dict(
-            axis=dict(range=[min_val, max_val], ticksuffix=suffix),
-            bar=dict(color=bar_color),
-            bgcolor=BRAND_COLOURS["border"],
-            borderwidth=0,
-            threshold=dict(
-                line=dict(color=BRAND_COLOURS["primary"], width=2),
-                thickness=0.75,
-                value=target
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=value,
+            number=dict(suffix=suffix, font=dict(size=28, color=BRAND_COLOURS["primary"])),
+            delta=dict(
+                reference=target,
+                relative=False,
+                valueformat=".1f",
+                increasing=dict(color=BRAND_COLOURS["positive"]),
+                decreasing=dict(color=BRAND_COLOURS["negative"]),
+            ),
+            title=dict(text=title, font=dict(size=14, color=BRAND_COLOURS["text_secondary"])),
+            gauge=dict(
+                axis=dict(range=[min_val, max_val], ticksuffix=suffix),
+                bar=dict(color=bar_color),
+                bgcolor=BRAND_COLOURS["border"],
+                borderwidth=0,
+                threshold=dict(line=dict(color=BRAND_COLOURS["primary"], width=2), thickness=0.75, value=target),
             ),
         )
-    ))
+    )
 
     fig.update_layout(
         height=200,
@@ -409,7 +409,9 @@ def display_kpi_cards(
         fig_monthly = go.Figure(
             data=[
                 go.Bar(name="Actual", x=kpi_df["Metric"], y=kpi_df["Actual"], marker_color=BRAND_COLOURS["primary"]),
-                go.Bar(name="Forecast", x=kpi_df["Metric"], y=kpi_df["Forecast"], marker_color=BRAND_COLOURS["secondary"]),
+                go.Bar(
+                    name="Forecast", x=kpi_df["Metric"], y=kpi_df["Forecast"], marker_color=BRAND_COLOURS["secondary"]
+                ),
             ]
         )
 
@@ -439,8 +441,15 @@ def display_kpi_cards(
 
         fig_ytd = go.Figure(
             data=[
-                go.Bar(name="Actual", x=kpi_ytd_df["Metric"], y=kpi_ytd_df["Actual"], marker_color=BRAND_COLOURS["primary"]),
-                go.Bar(name="Forecast", x=kpi_ytd_df["Metric"], y=kpi_ytd_df["Forecast"], marker_color=BRAND_COLOURS["secondary"]),
+                go.Bar(
+                    name="Actual", x=kpi_ytd_df["Metric"], y=kpi_ytd_df["Actual"], marker_color=BRAND_COLOURS["primary"]
+                ),
+                go.Bar(
+                    name="Forecast",
+                    x=kpi_ytd_df["Metric"],
+                    y=kpi_ytd_df["Forecast"],
+                    marker_color=BRAND_COLOURS["secondary"],
+                ),
             ]
         )
 
@@ -464,6 +473,7 @@ def display_kpi_cards(
 # PORTFOLIO SUMMARY TABLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_portfolio_summary_table(
     data: pd.DataFrame,
     group_column: str = "Type",
@@ -481,33 +491,43 @@ def create_portfolio_summary_table(
     """
 
     # Calculate variance and revenue impact
-    summary = data.groupby(group_column).agg({
-        "Sites": "sum",
-        "MWp": "sum",
-        "Budget_Monthly": "sum",
-        "WAB_Monthly": "sum",
-        "Actual_Monthly": "sum",
-        "Budget_YTD": "sum",
-        "WAB_YTD": "sum",
-        "Actual_YTD": "sum",
-    }).reset_index()
+    summary = (
+        data.groupby(group_column)
+        .agg(
+            {
+                "Sites": "sum",
+                "MWp": "sum",
+                "Budget_Monthly": "sum",
+                "WAB_Monthly": "sum",
+                "Actual_Monthly": "sum",
+                "Budget_YTD": "sum",
+                "WAB_YTD": "sum",
+                "Actual_YTD": "sum",
+            }
+        )
+        .reset_index()
+    )
 
     # Add variance columns
     summary["Variance_Monthly"] = summary["Actual_Monthly"] / summary["WAB_Monthly"]
     summary["Variance_YTD"] = summary["Actual_YTD"] / summary["WAB_YTD"]
 
     # Add totals row
-    totals = pd.DataFrame([{
-        group_column: "Total",
-        "Sites": summary["Sites"].sum(),
-        "MWp": summary["MWp"].sum(),
-        "Budget_Monthly": summary["Budget_Monthly"].sum(),
-        "WAB_Monthly": summary["WAB_Monthly"].sum(),
-        "Actual_Monthly": summary["Actual_Monthly"].sum(),
-        "Budget_YTD": summary["Budget_YTD"].sum(),
-        "WAB_YTD": summary["WAB_YTD"].sum(),
-        "Actual_YTD": summary["Actual_YTD"].sum(),
-    }])
+    totals = pd.DataFrame(
+        [
+            {
+                group_column: "Total",
+                "Sites": summary["Sites"].sum(),
+                "MWp": summary["MWp"].sum(),
+                "Budget_Monthly": summary["Budget_Monthly"].sum(),
+                "WAB_Monthly": summary["WAB_Monthly"].sum(),
+                "Actual_Monthly": summary["Actual_Monthly"].sum(),
+                "Budget_YTD": summary["Budget_YTD"].sum(),
+                "WAB_YTD": summary["WAB_YTD"].sum(),
+                "Actual_YTD": summary["Actual_YTD"].sum(),
+            }
+        ]
+    )
     totals["Variance_Monthly"] = totals["Actual_Monthly"] / totals["WAB_Monthly"]
     totals["Variance_YTD"] = totals["Actual_YTD"] / totals["WAB_YTD"]
 
@@ -524,13 +544,13 @@ def display_portfolio_table(df: pd.DataFrame, month_name: str = "October 2025"):
 
     # Format numeric columns
     for col in display_df.columns:
-        if display_df[col].dtype in ['float64', 'int64']:
+        if display_df[col].dtype in ["float64", "int64"]:
             col_lower = col.lower()
-            if 'variance' in col_lower:
+            if "variance" in col_lower:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.0%}" if pd.notna(x) and x != 0 else "")
-            elif 'mwp' in col_lower:
+            elif "mwp" in col_lower:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "")
-            elif 'sites' in col_lower or col == '#':
+            elif "sites" in col_lower or col == "#":
                 display_df[col] = display_df[col].apply(lambda x: f"{int(x)}" if pd.notna(x) else "")
             else:
                 display_df[col] = display_df[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
@@ -545,6 +565,7 @@ def display_portfolio_table(df: pd.DataFrame, month_name: str = "October 2025"):
 # ═══════════════════════════════════════════════════════════════════════════════
 # DATA CALCULATION HELPERS - ALIGNED WITH analysis.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def calculate_waterfall_components(
     df: pd.DataFrame,
@@ -566,7 +587,7 @@ def calculate_waterfall_components(
     if SolarDataAnalyzer:
         analyzer = SolarDataAnalyzer(data, colmap)
         data = analyzer.compute_losses()
-    
+
     # Get column mappings
     budget_col = colmap.get("budget_gen")
     actual_col = colmap.get("actual_gen")
@@ -648,7 +669,9 @@ def calculate_kpis(
     else:
         # Fallback to simple mean
         pr = data[pr_col].mean() if pr_col and pr_col in data.columns else 0
-        pr_budget = data[pr_budget_col].mean() if pr_budget_col and pr_budget_col in data.columns else Config.DEFAULT_PR_BUDGET
+        pr_budget = (
+            data[pr_budget_col].mean() if pr_budget_col and pr_budget_col in data.columns else Config.DEFAULT_PR_BUDGET
+        )
         avail = data[avail_col].mean() if avail_col and avail_col in data.columns else Config.DEFAULT_AVAILABILITY
 
     # Normalize to percentage scale (0-100)
@@ -670,6 +693,7 @@ def calculate_kpis(
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN REPORT TAB
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def render_excom_report_tab(tab, extractor):
     """
@@ -712,10 +736,7 @@ def render_excom_report_tab(tab, extractor):
 
             with col2:
                 selected_month = st.selectbox(
-                    "📅 Reporting Month",
-                    periods,
-                    index=len(periods) - 1 if periods else 0,
-                    key="excom_month"
+                    "📅 Reporting Month", periods, index=len(periods) - 1 if periods else 0, key="excom_month"
                 )
         else:
             st.warning("No date column found.")
@@ -849,8 +870,14 @@ def render_excom_report_tab(tab, extractor):
                 mwp = 0
                 if capacity_col and capacity_col in df_type.columns and site_col and site_col in df_type.columns:
                     # Get unique site-capacity pairs, sorted by date descending to get latest values
-                    df_type_sorted = df_type.sort_values(date_col, ascending=False) if date_col and date_col in df_type.columns else df_type
-                    unique_capacities = df_type_sorted.drop_duplicates(subset=[site_col], keep='first')[capacity_col].sum()
+                    df_type_sorted = (
+                        df_type.sort_values(date_col, ascending=False)
+                        if date_col and date_col in df_type.columns
+                        else df_type
+                    )
+                    unique_capacities = df_type_sorted.drop_duplicates(subset=[site_col], keep="first")[
+                        capacity_col
+                    ].sum()
                     mwp = unique_capacities / 1000
 
                 # Use waterfall components for consistency with charts
@@ -872,7 +899,7 @@ def render_excom_report_tab(tab, extractor):
 
             if summary_data:
                 summary_df = pd.DataFrame(summary_data)
-                
+
                 # Add totals row
                 totals = {
                     "Type": "Total",
@@ -887,11 +914,11 @@ def render_excom_report_tab(tab, extractor):
                 }
                 summary_data.append(totals)
                 summary_df = pd.DataFrame(summary_data)
-                
+
                 # Add variance columns
                 summary_df["Variance_Monthly"] = summary_df["Actual_Monthly"] / summary_df["WAB_Monthly"]
                 summary_df["Variance_YTD"] = summary_df["Actual_YTD"] / summary_df["WAB_YTD"]
-                
+
                 display_portfolio_table(summary_df, selected_month or "")
         else:
             st.info("Add a 'Type' column to your data to see the portfolio breakdown by asset type.")
@@ -904,7 +931,7 @@ def render_excom_report_tab(tab, extractor):
             with m3:
                 st.metric("Actual (Monthly)", f"{monthly_components['actual']:,.0f} MWh")
             with m4:
-                variance = monthly_components['actual'] / monthly_components['wab'] if monthly_components['wab'] else 0
+                variance = monthly_components["actual"] / monthly_components["wab"] if monthly_components["wab"] else 0
                 st.metric("Variance", f"{variance:.0%}")
 
         # ────────────────────────────────────────────────────────────────
@@ -916,17 +943,39 @@ def render_excom_report_tab(tab, extractor):
         col1, col2 = st.columns(2)
 
         with col1:
-            export_data = pd.DataFrame([
-                {"Metric": "Budget", "Monthly": monthly_components["budget"], "YTD": ytd_components["budget"]},
-                {"Metric": "Weather Δ (Var_Weather_kWh)", "Monthly": monthly_components["weather_var"], "YTD": ytd_components["weather_var"]},
-                {"Metric": "WAB", "Monthly": monthly_components["wab"], "YTD": ytd_components["wab"]},
-                {"Metric": "PR Loss (Loss_PR_kWh)", "Monthly": monthly_components["pr_loss"], "YTD": ytd_components["pr_loss"]},
-                {"Metric": "Avail Loss (Loss_Avail_kWh)", "Monthly": monthly_components["avail_loss"], "YTD": ytd_components["avail_loss"]},
-                {"Metric": "Total Tech Loss (Loss_Total_Tech_kWh)", "Monthly": monthly_components["total_tech_loss"], "YTD": ytd_components["total_tech_loss"]},
-                {"Metric": "Actual", "Monthly": monthly_components["actual"], "YTD": ytd_components["actual"]},
-                {"Metric": "PR (%)", "Monthly": monthly_kpis["pr"], "YTD": ytd_kpis["pr"]},
-                {"Metric": "Availability (%)", "Monthly": monthly_kpis["availability"], "YTD": ytd_kpis["availability"]},
-            ])
+            export_data = pd.DataFrame(
+                [
+                    {"Metric": "Budget", "Monthly": monthly_components["budget"], "YTD": ytd_components["budget"]},
+                    {
+                        "Metric": "Weather Δ (Var_Weather_kWh)",
+                        "Monthly": monthly_components["weather_var"],
+                        "YTD": ytd_components["weather_var"],
+                    },
+                    {"Metric": "WAB", "Monthly": monthly_components["wab"], "YTD": ytd_components["wab"]},
+                    {
+                        "Metric": "PR Loss (Loss_PR_kWh)",
+                        "Monthly": monthly_components["pr_loss"],
+                        "YTD": ytd_components["pr_loss"],
+                    },
+                    {
+                        "Metric": "Avail Loss (Loss_Avail_kWh)",
+                        "Monthly": monthly_components["avail_loss"],
+                        "YTD": ytd_components["avail_loss"],
+                    },
+                    {
+                        "Metric": "Total Tech Loss (Loss_Total_Tech_kWh)",
+                        "Monthly": monthly_components["total_tech_loss"],
+                        "YTD": ytd_components["total_tech_loss"],
+                    },
+                    {"Metric": "Actual", "Monthly": monthly_components["actual"], "YTD": ytd_components["actual"]},
+                    {"Metric": "PR (%)", "Monthly": monthly_kpis["pr"], "YTD": ytd_kpis["pr"]},
+                    {
+                        "Metric": "Availability (%)",
+                        "Monthly": monthly_kpis["availability"],
+                        "YTD": ytd_kpis["availability"],
+                    },
+                ]
+            )
 
             csv = export_data.to_csv(index=False)
             st.download_button(
@@ -934,5 +983,5 @@ def render_excom_report_tab(tab, extractor):
                 csv,
                 f"excom_report_{selected_month}.csv",
                 "text/csv",
-                use_container_width=True
+                use_container_width=True,
             )
