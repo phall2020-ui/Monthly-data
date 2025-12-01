@@ -1,3 +1,11 @@
+"""
+Solar Asset Data Manager - Main Application Entry Point
+
+This module serves as the main entry point for the Solar Asset Data Manager application,
+a comprehensive Streamlit-based tool for solar portfolio performance analysis.
+It handles navigation, page routing, and integration of various analysis modules.
+"""
+
 import streamlit as st
 
 from config import init_session_state, setup_page
@@ -8,18 +16,34 @@ from ui_tabs import (
     render_sidebar,
     render_tables_tab,
     render_upload_tab,
-    )
+)
 from ui_calculations_v2 import render_calculations_v2_tab
 from ui_waterfall_v2 import render_waterfall_tab_v2
 from ui_excom_report import render_excom_report_tab
 
 
-def set_page(page_name: str):
-    """Callback to set the page selector value before rerun."""
+def set_page(page_name: str) -> None:
+    """
+    Set the active page in the navigation system.
+
+    This callback function updates the session state to change the currently
+    selected page before Streamlit reruns the application.
+
+    Args:
+        page_name: Name of the page to navigate to (e.g., "Upload", "Query", "ExCom Report").
+    """
     st.session_state.page_selector = page_name
 
 
-def main():
+def main() -> None:
+    """
+    Main application entry point.
+
+    Initializes the Streamlit application, sets up session state, configures
+    the page layout, and handles navigation between different analysis tabs.
+    Routes user requests to appropriate rendering functions based on the
+    selected page.
+    """
     init_session_state()
     setup_page()
 
@@ -31,7 +55,7 @@ def main():
 
         # All page options including Upload and Query
         all_pages = ["ExCom Report", "Tables", "KPI Dashboard", "Calculations", "Waterfall", "Upload", "Query"]
-        
+
         # Determine the current index based on session state
         current_page = st.session_state.get("page_selector", "ExCom Report")
         if current_page in all_pages:
@@ -39,23 +63,16 @@ def main():
         else:
             current_index = 0
 
-        page = st.radio(
-            "Select Page",
-            all_pages,
-            index=current_index,
-            key="page_selector"
-        )
+        page = st.radio("Select Page", all_pages, index=current_index, key="page_selector")
 
         st.divider()
         st.write("### 📁 Data Management")
 
         col1, col2 = st.columns(2)
         with col1:
-            st.button("📤\nUpload", use_container_width=True, key="btn_upload",
-                      on_click=set_page, args=("Upload",))
+            st.button("📤\nUpload", use_container_width=True, key="btn_upload", on_click=set_page, args=("Upload",))
         with col2:
-            st.button("🔍\nQuery", use_container_width=True, key="btn_query",
-                      on_click=set_page, args=("Query",))
+            st.button("🔍\nQuery", use_container_width=True, key="btn_query", on_click=set_page, args=("Query",))
 
         st.divider()
         render_sidebar(extractor)
@@ -75,6 +92,7 @@ def main():
         render_waterfall_tab_v2(st.container(), extractor)
     elif page == "ExCom Report":
         render_excom_report_tab(st.container(), extractor)
+
 
 if __name__ == "__main__":
     main()

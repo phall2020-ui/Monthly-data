@@ -1,5 +1,14 @@
+"""
+Application Configuration Module
+
+This module contains configuration constants, session state initialization,
+page setup, and column mapping persistence functions for the Solar Asset
+Data Manager application.
+"""
+
 import json
 from pathlib import Path
+from typing import Dict, Optional
 
 import streamlit as st
 
@@ -7,7 +16,13 @@ from brand_theme import inject_brand_css, register_plotly_theme
 
 
 class Config:
-    """Application configuration constants."""
+    """
+    Application configuration constants.
+
+    This class contains all configuration constants used throughout the application,
+    including database defaults, performance thresholds, caching parameters, and
+    column detection patterns for auto-mapping uploaded data.
+    """
 
     DEFAULT_DB = "solar_assets.db"
     DEFAULT_FISCAL_START = 4  # April
@@ -76,8 +91,14 @@ class Config:
     }
 
 
-def init_session_state():
-    """Initialize all session state variables with defaults."""
+def init_session_state() -> None:
+    """
+    Initialize all session state variables with default values.
+
+    Sets up required session state variables if they don't already exist,
+    including database name, column mapping, and fiscal year settings.
+    Also attempts to load any previously saved column mappings.
+    """
     defaults = {
         "db_name": Config.DEFAULT_DB,
         "colmap": {},
@@ -97,8 +118,14 @@ def init_session_state():
             st.session_state["colmap_source"] = "persisted"
 
 
-def setup_page():
-    """Configure Streamlit page and intro content."""
+def setup_page() -> None:
+    """
+    Configure Streamlit page settings and display application header.
+
+    Sets up the page configuration including title, icon, and layout.
+    Applies brand styling and displays the application header with
+    getting started guide.
+    """
     st.set_page_config(
         page_title="Solar Asset Data Manager",
         page_icon="☀️",
@@ -216,8 +243,14 @@ def setup_page():
         )
 
 
-def save_colmap(colmap: dict):
-    """Persist the confirmed column mapping for future sessions."""
+def save_colmap(colmap: Dict[str, str]) -> None:
+    """
+    Persist the confirmed column mapping to disk for future sessions.
+
+    Args:
+        colmap: Dictionary mapping canonical column names to actual column names
+                in the uploaded data (e.g., {"actual_gen": "Actual Generation"}).
+    """
     try:
         Config.MAPPING_FILE.write_text(json.dumps(colmap, indent=2), encoding="utf-8")
     except Exception:
@@ -225,8 +258,13 @@ def save_colmap(colmap: dict):
         pass
 
 
-def load_saved_colmap() -> dict:
-    """Load a previously saved column mapping, if available."""
+def load_saved_colmap() -> Dict[str, str]:
+    """
+    Load a previously saved column mapping from disk.
+
+    Returns:
+        Dictionary with column mappings if found, empty dict otherwise.
+    """
     try:
         if Config.MAPPING_FILE.exists():
             return json.loads(Config.MAPPING_FILE.read_text(encoding="utf-8"))
@@ -235,8 +273,13 @@ def load_saved_colmap() -> dict:
     return {}
 
 
-def clear_saved_colmap():
-    """Remove any persisted column mapping."""
+def clear_saved_colmap() -> None:
+    """
+    Remove any persisted column mapping from disk.
+
+    This function is called when the user resets the column mapping
+    through the UI.
+    """
     try:
         if Config.MAPPING_FILE.exists():
             Config.MAPPING_FILE.unlink()
