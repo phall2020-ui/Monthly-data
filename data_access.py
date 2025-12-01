@@ -11,6 +11,73 @@ from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 
+def safe_convert_dates(series: pd.Series) -> pd.Series:
+    """
+    Safely convert date values to 'Mon-YY' format (e.g., 'Jan-25').
+    Handles multiple input formats including when dates are already formatted.
+    Handles mixed formats in the same series.
+    
+    Args:
+        series: Pandas Series containing date values
+        
+    Returns:
+        Series with dates converted to 'Mon-YY' format
+    """
+    if series.empty:
+        return series
+    
+    result = series.copy()
+    
+    # Check if ALL values are already in the target format (e.g., "Jan-25")
+    non_null_vals = result.dropna()
+    if len(non_null_vals) > 0:
+        all_valid = True
+        for val in non_null_vals:
+            try:
+                test_val = str(val)
+                parsed = pd.to_datetime(test_val, format="%b-%y", errors="coerce")
+                if pd.isna(parsed):
+                    all_valid = False
+                    break
+            except Exception:
+                all_valid = False
+                break
+        
+        if all_valid:
+            # All values already in correct format, return as is
+            return result
+    
+    # Try to convert each value individually (handles mixed formats)
+    date_formats = ["%b-%y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%m/%d/%Y"]
+    
+    def convert_single_date(val):
+        if pd.isna(val):
+            return val
+        
+        val_str = str(val)
+        
+        # Try each format
+        for fmt in date_formats:
+            try:
+                parsed = pd.to_datetime(val_str, format=fmt, errors="coerce")
+                if pd.notna(parsed):
+                    return parsed.strftime("%b-%y")
+            except Exception:
+                continue
+        
+        # Fallback: let pandas infer the format
+        try:
+            parsed = pd.to_datetime(val_str, errors="coerce")
+            if pd.notna(parsed):
+                return parsed.strftime("%b-%y")
+        except Exception:
+            pass
+        
+        return val  # Return original if cannot convert
+    
+    return result.apply(convert_single_date)
+
+
 class SolarDataExtractor:
     """Handles all SQLite interactions with connection pooling, validation, and duplicate handling."""
 
@@ -202,6 +269,66 @@ class SolarDataExtractor:
         
         return unique_rows, duplicate_rows
 
+    def check_for_duplicates(
+        self,
+        df: pd.DataFrame,
+        table_name: str,
+        key_columns: List[str],
+    ) -> Tuple[bool, pd.DataFrame, pd.DataFrame, Dict]:
+        """
+        Check for duplicates before adding data. Flags duplicates that would
+        be rejected if trying to insert (same month and site combination).
+        
+        This method does not modify the database - it only checks for potential
+        conflicts.
+        
+        Args:
+            df: DataFrame to check
+            table_name: Table to check against
+            key_columns: Columns to use as composite key (e.g., ['Site', 'Date'] for month and site)
+            
+        Returns:
+            Tuple of:
+                - has_duplicates: True if any duplicates found
+                - duplicates_in_input: DataFrame of rows that are duplicates within the input
+                - duplicates_with_db: DataFrame of rows that already exist in the database
+                - summary: Dict with counts and details
+        """
+        # Convert date columns for consistent comparison
+        df_check = df.copy()
+        date_patterns = ["date", "month", "period", "time"]
+        for col in df_check.columns:
+            if any(pat in col.lower() for pat in date_patterns):
+                try:
+                    df_check[col] = safe_convert_dates(df_check[col])
+                except Exception:
+                    pass
+        
+        # Check for duplicates within the input DataFrame
+        unique_df, duplicates_in_input = self.find_duplicates(df_check, key_columns)
+        
+        # Check for duplicates with the database
+        new_rows, duplicates_with_db = self.find_existing_rows(unique_df, table_name, key_columns)
+        
+        has_duplicates = len(duplicates_in_input) > 0 or len(duplicates_with_db) > 0
+        
+        summary = {
+            "total_rows": len(df),
+            "unique_in_input": len(unique_df),
+            "duplicates_in_input_count": len(duplicates_in_input),
+            "duplicates_with_db_count": len(duplicates_with_db),
+            "new_rows_count": len(new_rows),
+            "has_duplicates": has_duplicates,
+        }
+        
+        # Add duplicate details for flagging
+        if len(duplicates_in_input) > 0:
+            summary["flagged_input_duplicates"] = duplicates_in_input[key_columns].to_dict('records')
+        if len(duplicates_with_db) > 0:
+            summary["flagged_db_duplicates"] = duplicates_with_db[key_columns].to_dict('records')
+        
+        return has_duplicates, duplicates_in_input, duplicates_with_db, summary
+
     def find_existing_rows(
         self,
         df: pd.DataFrame,
@@ -319,12 +446,12 @@ class SolarDataExtractor:
                 print(f"  - Table name: {table_name}")
                 print(f"  - Mode: {mode}")
 
-            # Convert date columns to standard format
+            # Convert date columns to standard format using safe conversion
             date_patterns = ["date", "month", "period", "time"]
             for col in df.columns:
                 if any(pat in col.lower() for pat in date_patterns):
                     try:
-                        df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime("%b-%y")
+                        df[col] = safe_convert_dates(df[col])
                     except Exception:
                         pass
 
@@ -418,12 +545,12 @@ class SolarDataExtractor:
             unique_df, duplicate_df = self.find_duplicates(df, key_columns)
             stats["duplicates_in_input"] = len(duplicate_df)
             
-            # Convert date columns
+            # Convert date columns using safe conversion
             date_patterns = ["date", "month", "period", "time"]
             for col in unique_df.columns:
                 if any(pat in col.lower() for pat in date_patterns):
                     try:
-                        unique_df[col] = pd.to_datetime(unique_df[col], errors="coerce").dt.strftime("%b-%y")
+                        unique_df[col] = safe_convert_dates(unique_df[col])
                     except Exception:
                         pass
             
