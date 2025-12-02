@@ -507,6 +507,7 @@ def create_technical_losses_site_tables(
     site_col = colmap.get("site")
     pr_col = colmap.get("pr_actual")
     avail_col = colmap.get("availability")
+    actual_col = colmap.get("actual_gen")  # Extract once to avoid duplication
 
     if not site_col or site_col not in data.columns:
         # Return empty dataframes if no site column
@@ -525,9 +526,13 @@ def create_technical_losses_site_tables(
         }
     )
 
+    # Check if site_summary is empty
+    if site_summary.empty:
+        empty_df = pd.DataFrame(columns=["Site", "Technical Loss (kWh)", "PR (%)", "Availability (%)"])
+        return empty_df, empty_df
+
     # Calculate weighted averages for PR and Availability
     if pr_col and pr_col in data.columns:
-        actual_col = colmap.get("actual_gen")
         if actual_col and actual_col in data.columns:
             # Weighted average PR
             if weighted_average is not None:
@@ -543,7 +548,6 @@ def create_technical_losses_site_tables(
         site_summary["PR"] = 0
 
     if avail_col and avail_col in data.columns:
-        actual_col = colmap.get("actual_gen")
         if actual_col and actual_col in data.columns:
             # Weighted average Availability
             if weighted_average is not None:
@@ -558,11 +562,12 @@ def create_technical_losses_site_tables(
     else:
         site_summary["Availability"] = 0
 
-    # Normalize PR and Availability to 0-100 scale if needed
-    if site_summary["PR"].max() <= 1:
-        site_summary["PR"] = site_summary["PR"] * 100
-    if site_summary["Availability"].max() <= 1:
-        site_summary["Availability"] = site_summary["Availability"] * 100
+    # Normalize PR and Availability to 0-100 scale if needed (check for non-empty first)
+    if not site_summary.empty and len(site_summary) > 0:
+        if site_summary["PR"].max() <= 1:
+            site_summary["PR"] = site_summary["PR"] * 100
+        if site_summary["Availability"].max() <= 1:
+            site_summary["Availability"] = site_summary["Availability"] * 100
 
     # Reset index to have site as a column
     site_summary = site_summary.reset_index()
