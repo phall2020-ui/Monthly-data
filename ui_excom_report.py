@@ -470,6 +470,192 @@ def display_kpi_cards(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TECHNICAL LOSSES TABLES - TOP AND BOTTOM PERFORMERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def create_technical_losses_site_tables(
+    df: pd.DataFrame,
+    colmap: Dict[str, str],
+    period_filter: Optional[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Create top 5 and bottom 5 sites tables based on technical losses.
+
+    Args:
+        df: DataFrame with site-level data
+        colmap: Column mapping dictionary
+        period_filter: Optional period filter for specific month
+
+    Returns:
+        Tuple of (top_5_df, bottom_5_df) - both DataFrames with Site, Technical Loss, PR, and Availability
+    """
+    data = df.copy()
+
+    # Apply period filter if provided
+    if period_filter:
+        date_col = colmap.get("date")
+        if date_col and date_col in data.columns:
+            data = data[data[date_col] == period_filter]
+
+    # Use SolarDataAnalyzer to compute losses
+    if SolarDataAnalyzer:
+        analyzer = SolarDataAnalyzer(data, colmap)
+        data = analyzer.compute_losses()
+
+    # Get column mappings
+    site_col = colmap.get("site")
+    pr_col = colmap.get("pr_actual")
+    avail_col = colmap.get("availability")
+    actual_col = colmap.get("actual_gen")  # Extract once to avoid duplication
+
+    if not site_col or site_col not in data.columns:
+        # Return empty dataframes if no site column
+        empty_df = pd.DataFrame(columns=["Site", "Technical Loss (kWh)", "PR (%)", "Availability (%)"])
+        return empty_df, empty_df
+
+    # Check if losses were calculated
+    if "Loss_Total_Tech_kWh" not in data.columns:
+        empty_df = pd.DataFrame(columns=["Site", "Technical Loss (kWh)", "PR (%)", "Availability (%)"])
+        return empty_df, empty_df
+
+    # Group by site and sum technical losses
+    site_summary = data.groupby(site_col).agg(
+        {
+            "Loss_Total_Tech_kWh": "sum",
+        }
+    )
+
+    # Check if site_summary is empty
+    if site_summary.empty:
+        empty_df = pd.DataFrame(columns=["Site", "Technical Loss (kWh)", "PR (%)", "Availability (%)"])
+        return empty_df, empty_df
+
+    # Calculate weighted averages for PR and Availability
+    if pr_col and pr_col in data.columns:
+        if actual_col and actual_col in data.columns:
+            # Weighted average PR
+            if weighted_average is not None:
+                pr_by_site = data.groupby(site_col, group_keys=False).apply(
+                    lambda x: weighted_average(x, pr_col, actual_col), include_groups=False
+                )
+                site_summary["PR"] = pr_by_site
+            else:
+                site_summary["PR"] = data.groupby(site_col)[pr_col].mean()
+        else:
+            site_summary["PR"] = data.groupby(site_col)[pr_col].mean()
+    else:
+        site_summary["PR"] = 0
+
+    if avail_col and avail_col in data.columns:
+        if actual_col and actual_col in data.columns:
+            # Weighted average Availability
+            if weighted_average is not None:
+                avail_by_site = data.groupby(site_col, group_keys=False).apply(
+                    lambda x: weighted_average(x, avail_col, actual_col), include_groups=False
+                )
+                site_summary["Availability"] = avail_by_site
+            else:
+                site_summary["Availability"] = data.groupby(site_col)[avail_col].mean()
+        else:
+            site_summary["Availability"] = data.groupby(site_col)[avail_col].mean()
+    else:
+        site_summary["Availability"] = 0
+
+    # Normalize PR and Availability to 0-100 scale if needed
+    if not site_summary.empty:
+        # Use dropna().max() to handle NaN values
+        pr_max = site_summary["PR"].dropna().max() if not site_summary["PR"].isna().all() else 100
+        if pd.notna(pr_max) and pr_max <= 1:
+            site_summary["PR"] = site_summary["PR"] * 100
+        
+        avail_max = site_summary["Availability"].dropna().max() if not site_summary["Availability"].isna().all() else 100
+        if pd.notna(avail_max) and avail_max <= 1:
+            site_summary["Availability"] = site_summary["Availability"] * 100
+
+    # Reset index to have site as a column
+    site_summary = site_summary.reset_index()
+    site_summary.columns = ["Site", "Technical Loss (kWh)", "PR (%)", "Availability (%)"]
+
+    # Sort by technical loss (descending = worst performers first)
+    site_summary = site_summary.sort_values("Technical Loss (kWh)", ascending=False)
+
+    # Get top 5 (worst - highest losses) and bottom 5 (best - lowest losses)
+    top_5 = site_summary.head(5).copy()
+    bottom_5 = site_summary.tail(5).copy()
+
+    # Sort bottom 5 in ascending order for display
+    bottom_5 = bottom_5.sort_values("Technical Loss (kWh)", ascending=True)
+
+    return top_5, bottom_5
+
+
+def _format_losses_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Helper function to format technical losses table for display.
+
+    Args:
+        df: DataFrame with Site, Technical Loss, PR, and Availability columns
+
+    Returns:
+        Formatted DataFrame with proper string formatting
+    """
+    display_df = df.copy()
+    display_df["Technical Loss (kWh)"] = display_df["Technical Loss (kWh)"].apply(
+        lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+    )
+    display_df["PR (%)"] = display_df["PR (%)"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
+    display_df["Availability (%)"] = display_df["Availability (%)"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
+    return display_df
+
+
+def display_technical_losses_tables(
+    top_5: pd.DataFrame,
+    bottom_5: pd.DataFrame,
+    period_name: str = "Monthly",
+):
+    """
+    Display top 5 and bottom 5 sites by technical losses with PR and Availability.
+
+    Args:
+        top_5: DataFrame with top 5 sites (highest losses)
+        bottom_5: DataFrame with bottom 5 sites (lowest losses)
+        period_name: Name of the period (e.g., "Monthly", "YTD")
+    """
+    st.subheader(f"Technical Losses by Site ({period_name})")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 🔴 Top 5 Sites - Highest Technical Losses")
+        if not top_5.empty:
+            display_top = _format_losses_table(top_5)
+            st.dataframe(
+                display_top,
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.info("No data available")
+
+    with col2:
+        st.markdown("#### 🟢 Bottom 5 Sites - Lowest Technical Losses")
+        if not bottom_5.empty:
+            display_bottom = _format_losses_table(bottom_5)
+            st.dataframe(
+                display_bottom,
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.info("No data available")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PORTFOLIO SUMMARY TABLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -837,6 +1023,22 @@ def render_excom_report_tab(tab, extractor):
             pr_ytd_forecast=ytd_kpis["pr_forecast"],
             avail_ytd=ytd_kpis["availability"],
             avail_ytd_forecast=ytd_kpis["availability_forecast"],
+        )
+
+        st.divider()
+
+        # ────────────────────────────────────────────────────────────────
+        # TECHNICAL LOSSES BY SITE - TOP 5 AND BOTTOM 5
+        # ────────────────────────────────────────────────────────────────
+
+        # Calculate technical losses for monthly period
+        monthly_top_5, monthly_bottom_5 = create_technical_losses_site_tables(
+            df, colmap, selected_month
+        )
+
+        # Display the tables
+        display_technical_losses_tables(
+            monthly_top_5, monthly_bottom_5, f"{selected_month or 'Monthly'}"
         )
 
         st.divider()
