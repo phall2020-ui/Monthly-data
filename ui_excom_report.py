@@ -562,11 +562,15 @@ def create_technical_losses_site_tables(
     else:
         site_summary["Availability"] = 0
 
-    # Normalize PR and Availability to 0-100 scale if needed (check for non-empty first)
-    if not site_summary.empty and len(site_summary) > 0:
-        if site_summary["PR"].max() <= 1:
+    # Normalize PR and Availability to 0-100 scale if needed
+    if not site_summary.empty:
+        # Use dropna().max() to handle NaN values
+        pr_max = site_summary["PR"].dropna().max() if not site_summary["PR"].isna().all() else 100
+        if pd.notna(pr_max) and pr_max <= 1:
             site_summary["PR"] = site_summary["PR"] * 100
-        if site_summary["Availability"].max() <= 1:
+        
+        avail_max = site_summary["Availability"].dropna().max() if not site_summary["Availability"].isna().all() else 100
+        if pd.notna(avail_max) and avail_max <= 1:
             site_summary["Availability"] = site_summary["Availability"] * 100
 
     # Reset index to have site as a column
@@ -584,6 +588,29 @@ def create_technical_losses_site_tables(
     bottom_5 = bottom_5.sort_values("Technical Loss (kWh)", ascending=True)
 
     return top_5, bottom_5
+
+
+def _format_losses_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Helper function to format technical losses table for display.
+
+    Args:
+        df: DataFrame with Site, Technical Loss, PR, and Availability columns
+
+    Returns:
+        Formatted DataFrame with proper string formatting
+    """
+    display_df = df.copy()
+    display_df["Technical Loss (kWh)"] = display_df["Technical Loss (kWh)"].apply(
+        lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+    )
+    display_df["PR (%)"] = display_df["PR (%)"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
+    display_df["Availability (%)"] = display_df["Availability (%)"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
+    return display_df
 
 
 def display_technical_losses_tables(
@@ -606,18 +633,7 @@ def display_technical_losses_tables(
     with col1:
         st.markdown("#### 🔴 Top 5 Sites - Highest Technical Losses")
         if not top_5.empty:
-            # Format the display
-            display_top = top_5.copy()
-            display_top["Technical Loss (kWh)"] = display_top["Technical Loss (kWh)"].apply(
-                lambda x: f"{x:,.0f}" if pd.notna(x) else ""
-            )
-            display_top["PR (%)"] = display_top["PR (%)"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-            display_top["Availability (%)"] = display_top["Availability (%)"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-
+            display_top = _format_losses_table(top_5)
             st.dataframe(
                 display_top,
                 hide_index=True,
@@ -629,18 +645,7 @@ def display_technical_losses_tables(
     with col2:
         st.markdown("#### 🟢 Bottom 5 Sites - Lowest Technical Losses")
         if not bottom_5.empty:
-            # Format the display
-            display_bottom = bottom_5.copy()
-            display_bottom["Technical Loss (kWh)"] = display_bottom["Technical Loss (kWh)"].apply(
-                lambda x: f"{x:,.0f}" if pd.notna(x) else ""
-            )
-            display_bottom["PR (%)"] = display_bottom["PR (%)"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-            display_bottom["Availability (%)"] = display_bottom["Availability (%)"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-
+            display_bottom = _format_losses_table(bottom_5)
             st.dataframe(
                 display_bottom,
                 hide_index=True,
