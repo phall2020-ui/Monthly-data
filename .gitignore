@@ -7,6 +7,10 @@ __pycache__/
 test_upload.db*
 test_*.db*
 
+# SQLite temporary files
+*.db-shm
+*.db-wal
+
 # pytest cache
 .pytest_cache/
 
