@@ -23,6 +23,26 @@ import streamlit as st
 from analysis import SolarDataAnalyzer, weighted_average
 from config import Config
 
+# Try to import report button from unified app
+REPORT_BUTTON_AVAILABLE = False
+add_to_report_button = None
+
+try:
+    from components.report_button import add_to_report_button
+    REPORT_BUTTON_AVAILABLE = True
+except ImportError:
+    # Try with absolute path for unified app
+    import sys
+    from pathlib import Path
+    unified_app_path = Path(__file__).parent.parent / "unified_app"
+    if unified_app_path.exists() and str(unified_app_path) not in sys.path:
+        sys.path.insert(0, str(unified_app_path))
+        try:
+            from components.report_button import add_to_report_button
+            REPORT_BUTTON_AVAILABLE = True
+        except ImportError:
+            pass
+
 
 def clean_numeric(series: pd.Series) -> pd.Series:
     """
@@ -62,25 +82,41 @@ def parse_dates(series: pd.Series) -> pd.Series:
 
 
 def _standard_plot(df, x_col, metrics, chart_type, color_col):
+    # Get the report button function dynamically (may be injected at runtime)
+    report_button_fn = globals().get('add_to_report_button')
+
     fig = go.Figure()
     for metric in metrics:
         if metric not in df.columns:
             continue
 
+        # Only allow a literal color value; if the provided color_col looks like a column name, ignore it
+        literal_color = None
+        if isinstance(color_col, str):
+            cc = color_col.strip()
+            if cc.startswith("#") or cc.lower().startswith(("rgb(", "rgba(", "hsl(", "hsla(")):
+                literal_color = cc
+
         if chart_type == "Bar":
             fig.add_trace(
-                go.Bar(x=df[x_col], y=df[metric], name=metric, marker_color=color_col if len(metrics) == 1 else None)
+                go.Bar(x=df[x_col], y=df[metric], name=metric, marker_color=literal_color if len(metrics) == 1 else None)
             )
         elif chart_type == "Stacked Bar":
             fig.add_trace(go.Bar(x=df[x_col], y=df[metric], name=metric))
-        else:  # Line
+        else:  # Line / Area variant
+            color_primary = literal_color or "#2D8B9E"
+            color_fill = "rgba(45,139,158,0.18)"
             fig.add_trace(
                 go.Scatter(
                     x=df[x_col],
                     y=df[metric],
                     mode="lines+markers",
                     name=metric,
-                    line=dict(color=color_col if len(metrics) == 1 else None),
+                    line=dict(color=color_primary, width=2.5, shape="spline"),
+                    fill="tozeroy",
+                    fillcolor=color_fill,
+                    marker=dict(size=6, color=color_primary),
+                    hovertemplate=f"{metric}: "+"%{y:.0f}<extra></extra>",
                 )
             )
 
@@ -89,8 +125,80 @@ def _standard_plot(df, x_col, metrics, chart_type, color_col):
     elif chart_type == "Stacked Bar":
         fig.update_layout(barmode="stack")
 
-    fig.update_layout(title=f"{', '.join(metrics)} over {x_col}", height=400, hovermode="x unified")
+    # If single metric and x looks like period, apply area chart polish and annotations
+    chart_title = f"{', '.join(metrics)} over {x_col}"
+    if chart_type == "Line" and len(metrics) == 1 and x_col.lower().startswith("period"):
+        metric = metrics[0]
+        friendly_metric = metric.replace("_", " ").strip()
+        chart_title = f"Cumulative Installed Solar Capacity (kWp)" if "kwp" in metric.lower() else chart_title
+
+        # Format periods for display
+        try:
+            x_formatted = pd.to_datetime(df[x_col], errors="coerce").dt.strftime("%b '%y")
+        except Exception:
+            x_formatted = df[x_col]
+        fig.update_traces(x=x_formatted)
+
+        # Compute largest MoM jump
+        try:
+            y_vals = pd.to_numeric(df[metric], errors="coerce")
+            deltas = y_vals.diff()
+            max_idx = deltas.idxmax()
+            max_delta = deltas.max()
+            if pd.notna(max_idx) and pd.notna(max_delta) and max_delta != 0:
+                fig.add_annotation(
+                    x=x_formatted.iloc[max_idx],
+                    y=y_vals.iloc[max_idx],
+                    text=f"Major Capacity Addition: +{max_delta:,.0f} kWp",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=1,
+                    ax=0,
+                    ay=-40,
+                    bgcolor="#f6fbff",
+                    bordercolor="#2D8B9E",
+                    borderwidth=1,
+                )
+        except Exception:
+            pass
+
+        # Axes styling
+        fig.update_yaxes(
+            title_text="Installed Capacity (kWp)",
+            tickformat=",~s",
+            gridcolor="rgba(0,0,0,0.08)",
+            griddash="dash",
+            zeroline=False,
+        )
+        fig.update_xaxes(
+            title_text=None,
+            showgrid=False,
+            tickangle=-10,
+        )
+        fig.update_layout(
+            title=dict(text=chart_title, x=0.0),
+            hovermode="x unified",
+            height=420,
+            plot_bgcolor="#ffffff",
+            paper_bgcolor="#ffffff",
+            margin=dict(l=10, r=10, t=60, b=40),
+        )
+    else:
+        fig.update_layout(title=chart_title, height=400, hovermode="x unified")
+
     st.plotly_chart(fig, use_container_width=True)
+
+    # Add to report button
+    if callable(report_button_fn):
+        report_button_fn(
+            content=fig,
+            title=chart_title,
+            item_type='chart',
+            description=f"{chart_type} chart of {', '.join(metrics)}",
+            source_page="KPI Analysis",
+            button_key=f"add_chart_{'_'.join(metrics)}_{chart_type}".replace(' ', '_').replace('(', '').replace(')', '').replace('%', 'pct')
+        )
 
 
 def render_calculations_v2_tab(tab, extractor):
@@ -548,6 +656,18 @@ def render_calculations_v2_tab(tab, extractor):
             else:
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+            # Add to report button for the results table
+            report_button_fn = globals().get('add_to_report_button')
+            if callable(report_button_fn):
+                report_button_fn(
+                    content=results_df,
+                    title=f"KPI Results - {view_mode}",
+                    item_type='table',
+                    description=f"KPI analysis results with {len(results_df)} rows",
+                    source_page="KPI Analysis",
+                    button_key=f"add_kpi_table_{view_mode}".replace(' ', '_').replace('(', '').replace(')', '')
+                )
+
         # ─────────────────────────────────────────────────────────────
         # CHART
         # ─────────────────────────────────────────────────────────────
@@ -600,39 +720,137 @@ def render_calculations_v2_tab(tab, extractor):
                     if site_col and "Period" in results_df.columns:
                         # Pivot for heatmap
                         try:
+                            friendly_metric = metric.replace("_", " ").strip()
                             pivot_df = results_df.pivot(index=site_col, columns="Period", values=metric)
 
-                            # Custom Color Scale
-                            # Determine if "Low/Negative is Good" (Green -> Red)
-                            lower = metric.lower()
-                            is_low_good = False
+                            # Order sites alphabetically (case-insensitive, trimmed)
+                            pivot_df = pivot_df.sort_index(key=lambda s: s.str.strip().str.lower())
 
-                            if "loss" in lower:
-                                is_low_good = True
-                            elif "var" in lower and any(x in lower for x in ["pr", "avail", "pp"]):
-                                is_low_good = True
+                            # Format period labels and sort chronologically when parsable
+                            def _fmt_period(p):
+                                dt = pd.to_datetime(p, errors="coerce")
+                                return dt.strftime("%b '%y") if not pd.isna(dt) else str(p)
 
-                            if is_low_good:
-                                # Low/Negative is Good (Green), High/Positive is Bad (Red)
-                                colors = ["#1a9850", "#ffffff", "#d73027"]
+                            col_info = []
+                            for c in pivot_df.columns:
+                                dt = pd.to_datetime(c, errors="coerce")
+                                col_info.append((dt if not pd.isna(dt) else None, c, _fmt_period(c)))
+
+                            col_info.sort(key=lambda x: (x[0] is None, x[0] or pd.Timestamp.max))
+                            pivot_df = pivot_df[[c[1] for c in col_info]]
+                            pivot_df.columns = [c[2] for c in col_info]
+
+                            # Robust scaling: clamp to 5th/95th percentiles to avoid outlier washout
+                            vals = pivot_df.to_numpy().ravel()
+                            vals = vals[~np.isnan(vals)]
+                            if len(vals) > 0:
+                                vmin = np.percentile(vals, 5)
+                                vmax = np.percentile(vals, 95)
+                                if vmin == vmax:
+                                    pad = 1 if vmin == 0 else abs(vmin) * 0.1
+                                    vmin, vmax = vmin - pad, vmax + pad
                             else:
-                                # Low/Negative is Bad (Red), High/Positive is Good (Green)
-                                colors = ["#d73027", "#ffffff", "#1a9850"]
+                                vmin, vmax = -1, 1
 
-                            # Set midpoint to 0 for variance metrics
-                            midpoint = None
-                            if any(x in lower for x in ["variance", "diff", "var_"]):
-                                midpoint = 0
+                            # Make the scale symmetric around 0 so 0 is truly the midpoint
+                            span = max(abs(vmin), abs(vmax), 1e-9)
+                            vmin = -span
+                            vmax = span
 
-                            fig = px.imshow(
-                                pivot_df,
-                                labels=dict(x="Period", y="Site", color=metric),
-                                aspect="auto",
-                                color_continuous_scale=colors,
-                                color_continuous_midpoint=midpoint,
-                                title=f"{metric} Heatmap",
+                            zero_tint = "#e3f5eb"  # light green at zero
+
+                            metric_lower = friendly_metric.lower()
+                            negative_is_good = any(
+                                kw in metric_lower for kw in ["loss", "deficit", "gap"]
+                            )
+                            # Weather variance/diff: negative is bad
+                            if "weather" in metric_lower and any(kw in metric_lower for kw in ["var", "variance", "diff"]):
+                                negative_is_good = False
+                            # Generic variance/diff defaults to negative bad
+                            if not negative_is_good and any(kw in metric_lower for kw in ["var", "variance", "diff"]):
+                                negative_is_good = False
+
+                            if negative_is_good:
+                                neg_color, pos_color = "#1b9e4b", "#c94a4a"  # green for savings, red for loss
+                                colorbar_title = f"{friendly_metric} (neg = saved, pos = loss)"
+                            else:
+                                neg_color, pos_color = "#c94a4a", "#1b9e4b"  # red for deficit, green for gain
+                                colorbar_title = f"{friendly_metric} (neg = worse, pos = better)"
+
+                            colors = [
+                                [0.0, neg_color],
+                                [0.35, neg_color],
+                                [0.5, zero_tint],
+                                [0.65, zero_tint],
+                                [1.0, pos_color],
+                            ]
+
+                            fig = go.Figure()
+                            fig.add_trace(
+                                go.Heatmap(
+                                    z=pivot_df.values,
+                                    x=pivot_df.columns,
+                                    y=pivot_df.index,
+                                    colorscale=colors,
+                                    zmin=vmin,
+                                    zmax=vmax,
+                                    zmid=0,
+                                    colorbar=dict(
+                                        orientation="h",
+                                        yanchor="bottom",
+                                        y=1.08,
+                                        x=0.5,
+                                        xanchor="center",
+                                        len=0.7,
+                                        title=colorbar_title,
+                                    ),
+                                    xgap=1,
+                                    ygap=1,
+                                    hovertemplate="Site: %{y}<br>Period: %{x}<br>%{z:.0f} kWh<extra></extra>",
+                                )
+                            )
+
+                            # Overlay a grey mask for NaNs so they stand out from true zeros
+                            nan_mask = pivot_df.isna().astype(float)
+                            if nan_mask.to_numpy().sum() > 0:
+                                fig.add_trace(
+                                    go.Heatmap(
+                                        z=nan_mask.values,
+                                        x=pivot_df.columns,
+                                        y=pivot_df.index,
+                                        colorscale=[[0, "rgba(0,0,0,0)"], [1, "#e8ecef"]],
+                                        showscale=False,
+                                        hoverinfo="skip",
+                                        xgap=1,
+                                        ygap=1,
+                                    )
+                                )
+
+                            fig.update_xaxes(showgrid=False, title=None)
+                            fig.update_yaxes(showgrid=False, title=None)
+                            subtitle = "Green = Energy Saved (Negative) | Red = Energy Loss (Positive)" if negative_is_good else "Red = Deficit (Negative) | Green = Better (Positive)"
+
+                            fig.update_layout(
+                                margin=dict(l=10, r=10, t=60, b=10),
+                                title=dict(
+                                    text=f"<b>{friendly_metric} by Site</b><br><sup>{subtitle}</sup>",
+                                    x=0.0,
+                                ),
+                                hovermode="closest",
+                                paper_bgcolor="#ffffff",
+                                plot_bgcolor="#ffffff",
                             )
                             st.plotly_chart(fig, use_container_width=True)
+                            report_button_fn = globals().get('add_to_report_button')
+                            if callable(report_button_fn):
+                                report_button_fn(
+                                    content=fig,
+                                    title=f"{metric} Heatmap",
+                                    item_type='chart',
+                                    description=f"Heatmap of {metric} by site and period",
+                                    source_page="KPI Analysis",
+                                    button_key=f"add_heatmap_{metric}".replace(' ', '_').replace('(', '').replace(')', '')
+                                )
                         except Exception as e:
                             st.error(f"Could not create heatmap: {e}")
                     else:
@@ -665,10 +883,21 @@ def render_calculations_v2_tab(tab, extractor):
                             secondary_y=True,
                         )
 
-                        fig.update_layout(title=f"{m1} vs {m2}")
+                        chart_title = f"{m1} vs {m2}"
+                        fig.update_layout(title=chart_title)
                         fig.update_yaxes(title_text=m1, secondary_y=False)
                         fig.update_yaxes(title_text=m2, secondary_y=True)
                         st.plotly_chart(fig, use_container_width=True)
+                        report_button_fn = globals().get('add_to_report_button')
+                        if callable(report_button_fn):
+                            report_button_fn(
+                                content=fig,
+                                title=chart_title,
+                                item_type='chart',
+                                description=f"Dual-axis chart comparing {m1} and {m2}",
+                                source_page="KPI Analysis",
+                                button_key=f"add_dual_{m1}_{m2}".replace(' ', '_').replace('(', '').replace(')', '').replace('%', 'pct')
+                            )
                     else:
                         # Standard plot for same types
                         _standard_plot(results_df, x_col, chart_metrics, chart_type, color_col)

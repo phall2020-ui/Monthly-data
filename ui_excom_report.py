@@ -33,6 +33,21 @@ except ImportError:
     SolarDataAnalyzer = None
     weighted_average = None
 
+# Try to import report button from unified app (may be injected at runtime)
+add_to_report_button = None
+try:
+    from components.report_button import add_to_report_button
+except ImportError:
+    import sys
+    from pathlib import Path
+    unified_app_path = Path(__file__).parent.parent / "unified_app"
+    if unified_app_path.exists() and str(unified_app_path) not in sys.path:
+        sys.path.insert(0, str(unified_app_path))
+        try:
+            from components.report_button import add_to_report_button
+        except ImportError:
+            pass
+
 # Try to import brand colours, fall back to defaults
 try:
     from brand_theme import BRAND_COLOURS, CHART_COLORWAY
@@ -392,6 +407,8 @@ def display_kpi_cards(
     avail_ytd_forecast: float,
 ):
     """Display KPIs as bar charts in ExCom style."""
+    # Get the report button function dynamically (may be injected at runtime)
+    report_button_fn = globals().get('add_to_report_button')
 
     st.subheader("Technical KPIs")
 
@@ -429,6 +446,15 @@ def display_kpi_cards(
         )
 
         st.plotly_chart(fig_monthly, use_container_width=True)
+        if callable(report_button_fn):
+            report_button_fn(
+                content=fig_monthly,
+                title="Monthly KPIs - PR & Availability",
+                item_type='chart',
+                description="Monthly PR and Availability vs Forecast",
+                source_page="ExCom Report",
+                button_key="add_kpi_monthly"
+            )
 
     # YTD KPIs
     with col2:
@@ -467,6 +493,15 @@ def display_kpi_cards(
         )
 
         st.plotly_chart(fig_ytd, use_container_width=True)
+        if callable(report_button_fn):
+            report_button_fn(
+                content=fig_ytd,
+                title="YTD KPIs - PR & Availability",
+                item_type='chart',
+                description="Year-to-date PR and Availability vs Forecast",
+                source_page="ExCom Report",
+                button_key="add_kpi_ytd"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -626,6 +661,9 @@ def display_technical_losses_tables(
         bottom_5: DataFrame with bottom 5 sites (lowest losses)
         period_name: Name of the period (e.g., "Monthly", "YTD")
     """
+    # Get the report button function dynamically (may be injected at runtime)
+    report_button_fn = globals().get('add_to_report_button')
+
     st.subheader(f"Technical Losses by Site ({period_name})")
 
     col1, col2 = st.columns(2)
@@ -639,6 +677,15 @@ def display_technical_losses_tables(
                 hide_index=True,
                 use_container_width=True,
             )
+            if callable(report_button_fn):
+                report_button_fn(
+                    content=top_5,
+                    title=f"Top 5 Sites - Highest Technical Losses ({period_name})",
+                    item_type='table',
+                    description=f"Sites with highest technical losses for {period_name}",
+                    source_page="ExCom Report",
+                    button_key=f"add_top5_losses_{period_name}".replace(' ', '_')
+                )
         else:
             st.info("No data available")
 
@@ -651,6 +698,15 @@ def display_technical_losses_tables(
                 hide_index=True,
                 use_container_width=True,
             )
+            if callable(report_button_fn):
+                report_button_fn(
+                    content=bottom_5,
+                    title=f"Bottom 5 Sites - Lowest Technical Losses ({period_name})",
+                    item_type='table',
+                    description=f"Sites with lowest technical losses for {period_name}",
+                    source_page="ExCom Report",
+                    button_key=f"add_bottom5_losses_{period_name}".replace(' ', '_')
+                )
         else:
             st.info("No data available")
 
@@ -725,6 +781,9 @@ def create_portfolio_summary_table(
 def display_portfolio_table(df: pd.DataFrame, month_name: str = "October 2025"):
     """Display the formatted portfolio summary table."""
 
+    # Get the report button function dynamically (may be injected at runtime)
+    report_button_fn = globals().get('add_to_report_button')
+
     # Format for display
     display_df = df.copy()
 
@@ -746,6 +805,17 @@ def display_portfolio_table(df: pd.DataFrame, month_name: str = "October 2025"):
         hide_index=True,
         use_container_width=True,
     )
+
+    # Offer export to report if available
+    if callable(report_button_fn):
+        report_button_fn(
+            content=df,
+            title=f"Portfolio Summary ({month_name})",
+            item_type='table',
+            description="Portfolio breakdown by asset type with budget vs actual",
+            source_page="ExCom Report",
+            button_key=f"add_portfolio_summary_{month_name}".replace(' ', '_')
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -877,6 +947,105 @@ def calculate_kpis(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CSV EXPORT GENERATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+REVENUE_RATE_PER_KWH = 0.1  # £0.1 per kWh
+
+
+def generate_excom_csv_export(summary_data, monthly_components, ytd_components, monthly_kpis, ytd_kpis, month_name):
+    """
+    Generate CSV export matching the ExCom table format.
+    
+    Returns a CSV string with:
+    - Portfolio summary table
+    - KPI table (PR, Availability)
+    - Month waterfall components
+    - YTD waterfall components
+    
+    Revenue is calculated at £0.1/kWh. The # column is left blank.
+    """
+    import io
+    
+    output = io.StringIO()
+    
+    # ── Portfolio Summary Table ──
+    output.write(f"ExCom Report - {month_name}\n\n")
+    output.write("Portfolio Summary\n")
+    
+    # Header row
+    output.write("Portfolio[1],#,AUM MWp,")
+    output.write("Month Budget,Month W-A-B,Month Actual,Month Variance,Month Revenue Impact (£k),")
+    output.write("YTD Budget,YTD W-A-B,YTD Actual,YTD Variance,YTD Revenue Impact (£k)\n")
+    
+    # Data rows from summary_data
+    for row in summary_data:
+        portfolio_name = row.get("Type", "")
+        mwp = row.get("MWp", 0)
+        
+        # Month values
+        m_budget = row.get("Budget_Monthly", 0)
+        m_wab = row.get("WAB_Monthly", 0)
+        m_actual = row.get("Actual_Monthly", 0)
+        m_variance = m_actual / m_wab if m_wab else 0
+        m_revenue = (m_actual - m_wab) * REVENUE_RATE_PER_KWH / 1000  # Convert to £k
+        
+        # YTD values
+        y_budget = row.get("Budget_YTD", 0)
+        y_wab = row.get("WAB_YTD", 0)
+        y_actual = row.get("Actual_YTD", 0)
+        y_variance = y_actual / y_wab if y_wab else 0
+        y_revenue = (y_actual - y_wab) * REVENUE_RATE_PER_KWH / 1000  # Convert to £k
+        
+        output.write(f"{portfolio_name},,{mwp:.1f},")
+        output.write(f"{m_budget:.0f},{m_wab:.0f},{m_actual:.0f},{m_variance:.1%},{m_revenue:.1f},")
+        output.write(f"{y_budget:.0f},{y_wab:.0f},{y_actual:.0f},{y_variance:.1%},{y_revenue:.1f}\n")
+    
+    output.write("\n")
+    
+    # ── KPI Table (layout matches ExCom format) ──
+    output.write("KPIs\n")
+    output.write(",Forecast,Actual\n")
+    
+    # Values are already in percentage scale (e.g., 85 means 85%)
+    pr_forecast = monthly_kpis.get("pr_forecast", 0)
+    pr_month = monthly_kpis.get("pr", 0)
+    pr_ytd = ytd_kpis.get("pr", 0)
+    avail_forecast = monthly_kpis.get("availability_forecast", 0)
+    avail_month = monthly_kpis.get("availability", 0)
+    avail_ytd = ytd_kpis.get("availability", 0)
+    
+    output.write(f"PR,{pr_forecast:.0f}%,{pr_month:.0f}%\n")
+    output.write(f"Availability,{avail_forecast:.0f}%,{avail_month:.0f}%\n")
+    output.write(f"PR - YTD,{pr_forecast:.0f}%,{pr_ytd:.1f}%\n")
+    output.write(f"Availability - YTD,{avail_forecast:.0f}%,{avail_ytd:.1f}%\n")
+    
+    output.write("\n")
+    
+    # ── Month Waterfall ──
+    output.write("Month Waterfall\n")
+    output.write("Component,Value (MWh)\n")
+    output.write(f"Budget,{monthly_components.get('budget', 0):.0f}\n")
+    output.write(f"Irradiance,{monthly_components.get('weather_var', 0):.0f}\n")
+    output.write(f"Availability,{monthly_components.get('avail_loss', 0):.0f}\n")
+    output.write(f"Efficiency,{monthly_components.get('pr_loss', 0):.0f}\n")
+    output.write(f"Actual,{monthly_components.get('actual', 0):.0f}\n")
+    
+    output.write("\n")
+    
+    # ── YTD Waterfall ──
+    output.write("YTD Waterfall\n")
+    output.write("Component,Value (MWh)\n")
+    output.write(f"Budget,{ytd_components.get('budget', 0):.0f}\n")
+    output.write(f"Irradiance,{ytd_components.get('weather_var', 0):.0f}\n")
+    output.write(f"Availability,{ytd_components.get('avail_loss', 0):.0f}\n")
+    output.write(f"Efficiency,{ytd_components.get('pr_loss', 0):.0f}\n")
+    output.write(f"Actual,{ytd_components.get('actual', 0):.0f}\n")
+    
+    return output.getvalue()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN REPORT TAB
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -980,6 +1149,9 @@ def render_excom_report_tab(tab, extractor):
         # DISPLAY WATERFALLS (EXCOM STYLE)
         # ────────────────────────────────────────────────────────────────
 
+        # Get the report button function dynamically (may be injected at runtime)
+        report_button_fn = globals().get('add_to_report_button')
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -994,6 +1166,15 @@ def render_excom_report_tab(tab, extractor):
                 height=380,
             )
             st.plotly_chart(fig_monthly, use_container_width=True)
+            if callable(report_button_fn):
+                report_button_fn(
+                    content=fig_monthly,
+                    title=f"Performance Waterfall - {selected_month or 'Monthly'}",
+                    item_type='chart',
+                    description=f"Monthly performance waterfall chart",
+                    source_page="ExCom Report",
+                    button_key=f"add_waterfall_monthly_{selected_month or 'Monthly'}".replace(' ', '_').replace('-', '_')
+                )
 
         with col2:
             fig_ytd = create_excom_waterfall(
@@ -1007,6 +1188,15 @@ def render_excom_report_tab(tab, extractor):
                 height=380,
             )
             st.plotly_chart(fig_ytd, use_container_width=True)
+            if callable(report_button_fn):
+                report_button_fn(
+                    content=fig_ytd,
+                    title="Performance Waterfall - YTD",
+                    item_type='chart',
+                    description="Year-to-date performance waterfall chart",
+                    source_page="ExCom Report",
+                    button_key="add_waterfall_ytd"
+                )
 
         st.divider()
 
@@ -1145,41 +1335,15 @@ def render_excom_report_tab(tab, extractor):
         col1, col2 = st.columns(2)
 
         with col1:
-            export_data = pd.DataFrame(
-                [
-                    {"Metric": "Budget", "Monthly": monthly_components["budget"], "YTD": ytd_components["budget"]},
-                    {
-                        "Metric": "Weather Δ (Var_Weather_kWh)",
-                        "Monthly": monthly_components["weather_var"],
-                        "YTD": ytd_components["weather_var"],
-                    },
-                    {"Metric": "WAB", "Monthly": monthly_components["wab"], "YTD": ytd_components["wab"]},
-                    {
-                        "Metric": "PR Loss (Loss_PR_kWh)",
-                        "Monthly": monthly_components["pr_loss"],
-                        "YTD": ytd_components["pr_loss"],
-                    },
-                    {
-                        "Metric": "Avail Loss (Loss_Avail_kWh)",
-                        "Monthly": monthly_components["avail_loss"],
-                        "YTD": ytd_components["avail_loss"],
-                    },
-                    {
-                        "Metric": "Total Tech Loss (Loss_Total_Tech_kWh)",
-                        "Monthly": monthly_components["total_tech_loss"],
-                        "YTD": ytd_components["total_tech_loss"],
-                    },
-                    {"Metric": "Actual", "Monthly": monthly_components["actual"], "YTD": ytd_components["actual"]},
-                    {"Metric": "PR (%)", "Monthly": monthly_kpis["pr"], "YTD": ytd_kpis["pr"]},
-                    {
-                        "Metric": "Availability (%)",
-                        "Monthly": monthly_kpis["availability"],
-                        "YTD": ytd_kpis["availability"],
-                    },
-                ]
+            # Generate CSV export matching ExCom table format
+            csv = generate_excom_csv_export(
+                summary_data=summary_data if 'summary_data' in dir() else [],
+                monthly_components=monthly_components,
+                ytd_components=ytd_components,
+                monthly_kpis=monthly_kpis,
+                ytd_kpis=ytd_kpis,
+                month_name=selected_month or ""
             )
-
-            csv = export_data.to_csv(index=False)
             st.download_button(
                 "📥 Download Report Data (CSV)",
                 csv,

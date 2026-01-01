@@ -24,6 +24,22 @@ import streamlit as st
 
 from analysis import SolarDataAnalyzer, weighted_average
 
+# Optional report button (injected when running inside unified app)
+add_to_report_button = None
+try:
+    from components.report_button import add_to_report_button  # type: ignore
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    unified_app_path = Path(__file__).parent.parent / "unified_app"
+    if unified_app_path.exists() and str(unified_app_path) not in sys.path:
+        sys.path.insert(0, str(unified_app_path))
+        try:
+            from components.report_button import add_to_report_button  # type: ignore
+        except ImportError:
+            add_to_report_button = None
+
 
 def clean_numeric(series: pd.Series) -> pd.Series:
     """
@@ -350,6 +366,15 @@ def render_waterfall_tab_v2(tab, extractor):
                 "Portfolio Loss Waterfall",
             )
             st.plotly_chart(fig, use_container_width=True)
+            if callable(add_to_report_button):
+                add_to_report_button(
+                    content=fig,
+                    title="Portfolio Loss Waterfall",
+                    item_type="chart",
+                    description="Budget to Actual generation waterfall with weather and efficiency impacts",
+                    source_page="Waterfall",
+                    button_key="add_portfolio_loss_waterfall"
+                )
 
             # Loss breakdown
             st.subheader("📋 Loss Breakdown")
@@ -385,6 +410,15 @@ def render_waterfall_tab_v2(tab, extractor):
             breakdown_df["kWh"] = breakdown_df["kWh"].apply(lambda x: f"{x:,.0f}")
             breakdown_df["% of Budget"] = breakdown_df["% of Budget"].apply(lambda x: f"{x:+.2f}%")
             st.dataframe(breakdown_df, hide_index=True, use_container_width=True)
+            if callable(add_to_report_button):
+                add_to_report_button(
+                    content=breakdown_df,
+                    title="Loss Breakdown Table",
+                    item_type="table",
+                    description="Breakdown of weather, availability, and efficiency losses",
+                    source_page="Waterfall",
+                    button_key="add_loss_breakdown_table"
+                )
 
         else:
             # ─────────────────────────────────────────────────────────
